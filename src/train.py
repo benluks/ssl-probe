@@ -47,7 +47,7 @@ def main():
         inference_frame_budget=10 * args.frame_batch_size,
     )
 
-    if args.val_dataset is None:
+    if args.val_split is None:
         val_dataset = None
     else:
         val_dataset = FrameDataset(
