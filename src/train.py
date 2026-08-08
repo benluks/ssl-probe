@@ -21,8 +21,8 @@ def parse_args():
     parser.add_argument("--train-split", default="train-clean-100")
     parser.add_argument("--val-split", default="dev-clean")
     parser.add_argument("--layer", type=int, default=5)
-    parser.add_argument("--frame-batch-size", type=int, default=16_382)
-    parser.add_argument("--hidden-dim", type=list | int, default=[])
+    parser.add_argument("--frame-batch-size", type=int, default=8192)
+    parser.add_argument("--hidden-dim", type=list, default=[])
 
     # Optimization
     parser.add_argument("--lr", type=float, default=1e-3)
