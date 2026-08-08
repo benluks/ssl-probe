@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 
 import torch
 from quick_convert.pipelines.training import (
@@ -17,9 +18,11 @@ def parse_args():
 
     # Data / representation
     parser.add_argument("--root", required=True)
-    parser.add_argument("--split", default="train-clean-100")
+    parser.add_argument("--train-split", default="train-clean-100")
+    parser.add_argument("--val-split", default="dev-clean")
     parser.add_argument("--layer", type=int, default=5)
     parser.add_argument("--frame-batch-size", type=int, default=16_382)
+    parser.add_argument("--hidden-dim", type=list | int, default=[])
 
     # Optimization
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -28,7 +31,7 @@ def parse_args():
     parser.add_argument("--warmup", type=float, default=0.05)
 
     # Output
-    parser.add_argument("--out-dir", default="outputs/pitch")
+    parser.add_argument("--out-dir", default=None)
 
     return parser.parse_args()
 
@@ -38,14 +41,26 @@ def main():
 
     train_dataset = FrameDataset(
         root=args.root,
-        splits=[args.split],
+        splits=[args.train_split],
         layer=args.layer,
         frame_batch_size=args.frame_batch_size,
         inference_frame_budget=10 * args.frame_batch_size,
     )
 
+    if args.val_dataset is None:
+        val_dataset = None
+    else:
+        val_dataset = FrameDataset(
+            root=args.root,
+            splits=[args.val_split],
+            layer=args.layer,
+            frame_batch_size=args.frame_batch_size,
+            inference_frame_budget=10 * args.frame_batch_size,
+        )
+
     module = Probe(
         input_dim=train_dataset.content_encoder.encoder.feature_dim,
+        hidden_dim=args.hidden_dim,
         optimization=Optimization(
             optimizer=torch.optim.AdamW,
             optimizer_kwargs={
@@ -69,10 +84,13 @@ def main():
         },
     )
 
+    out_dir = args.out_dir or Path("output") / f"wavlm_l{args.layer + 1}"
+
     pipeline = TrainingPipeline(
         trainer=trainer,
         train_dataset=train_dataset,
-        out_dir=args.out_dir,
+        val_dataset=val_dataset,
+        out_dir=out_dir,
     )
 
     pipeline.run()

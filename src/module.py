@@ -22,10 +22,20 @@ class Probe(BaseTrainingModule):
         self,
         input_dim: int,
         optimization: Optimization,
+        hidden_dim: list[int] | None = None,
     ) -> None:
         super().__init__(optimization)
 
-        self.probe = nn.Linear(input_dim, 1)
+        hidden_dim = hidden_dim or []
+        if isinstance(hidden_dim, int):
+            hidden_dim = [hidden_dim]
+
+        layers = []
+        in_dim = input_dim
+        for dim in [*hidden_dim, 1]:
+            layers.append(nn.Linear(in_dim, dim))
+            in_dim = dim
+        self.probe = nn.Sequential(*layers)
         self.r2 = R2Score()
 
     def _shared_step(
