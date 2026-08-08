@@ -19,10 +19,13 @@ def parse_args():
     # Data / representation
     parser.add_argument("--root", required=True)
     parser.add_argument("--train-split", default="train-clean-100")
-    parser.add_argument("--val-split", default=None)
+    parser.add_argument("--val-split", default="dev-clean")
     parser.add_argument("--layer", type=int, default=5)
     parser.add_argument("--frame-batch-size", type=int, default=8192)
     parser.add_argument("--hidden-dim", type=int, nargs="+", default=[])
+    parser.add_argument(
+        "--nonlinearity", type=str, choices=["relu", "gelu", "none"], default="gelu"
+    )
 
     # Optimization
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -84,7 +87,10 @@ def main():
         },
     )
 
-    out_dir = args.out_dir or Path("output") / f"wavlm_l{args.layer + 1}"
+    out_dir = (
+        args.out_dir
+        or Path("output") / f"wavlm_l{args.layer + 1}_{args.nonlinearity or ''}"
+    )
 
     pipeline = TrainingPipeline(
         trainer=trainer,

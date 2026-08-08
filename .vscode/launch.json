@@ -16,6 +16,8 @@
                 "/Users/ben/librispeech/LibriSpeech",
                 "--train-split",
                 "test-other",
+                "--val-split",
+                "test-other",
                 "--frame-batch-size",
                 "512",
                 "--hidden-dim",

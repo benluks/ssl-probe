@@ -9,6 +9,8 @@ from quick_convert.pipelines.training import BaseTrainingModule, Optimization
 from torch import nn
 from torchmetrics.regression import R2Score
 
+NONLINEARITIES = {"relu": nn.ReLU, "gelu": nn.GELU, "none": nn.Identity}
+
 
 @dataclass
 class ProbeOutput:
@@ -23,6 +25,7 @@ class Probe(BaseTrainingModule):
         input_dim: int,
         optimization: Optimization,
         hidden_dim: list[int] | None = None,
+        nonlinearity: str = "gelu",
     ) -> None:
         super().__init__(optimization)
 
@@ -32,8 +35,12 @@ class Probe(BaseTrainingModule):
 
         layers = []
         in_dim = input_dim
-        for dim in [*hidden_dim, 1]:
+
+        output_dims = [*hidden_dim, 1]
+        for i, dim in enumerate(output_dims):
             layers.append(nn.Linear(in_dim, dim))
+            if i != len(output_dims) - 1:
+                layers.append(NONLINEARITIES[nonlinearity]())
             in_dim = dim
         self.probe = nn.Sequential(*layers)
         self.r2 = R2Score()
