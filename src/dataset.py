@@ -1,14 +1,58 @@
 from __future__ import annotations
 
 import math
+import random
 
 import opensmile
 import torch
+import torchaudio
 from quick_convert.components.feature_extractors.content import ContentFeatureExtractor
 from quick_convert.components.ssl import WavLMContentEncoder
 from quick_convert.data import AudioBatch, AudioSample, load_dataset
 from quick_convert.data.resources import ResourceCollection, ResourceRef
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import DataLoader, IterableDataset, Sampler
+
+
+class FrameBudgetBatchSampler(Sampler[list[int]]):
+    def __init__(
+        self,
+        frame_lengths: list[int],
+        max_frames: int,
+        shuffle: bool = True,
+    ):
+        self.frame_lengths = frame_lengths
+        self.max_frames = max_frames
+        self.shuffle = shuffle
+
+    def __iter__(self):
+        indices = list(range(len(self.frame_lengths)))
+
+        if self.shuffle:
+            random.shuffle(indices)
+
+        batch = []
+        max_len = 0
+
+        for idx in indices:
+            length = self.frame_lengths[idx]
+
+            candidate_max = max(max_len, length)
+            candidate_size = len(batch) + 1
+
+            # Approximate padded WavLM cost:
+            # B * max(T_i)
+            padded_frames = candidate_size * candidate_max
+
+            if batch and padded_frames > self.max_frames:
+                yield batch
+                batch = [idx]
+                max_len = length
+            else:
+                batch.append(idx)
+                max_len = candidate_max
+
+        if batch:
+            yield batch
 
 
 class FrameDataset(IterableDataset):
@@ -19,7 +63,7 @@ class FrameDataset(IterableDataset):
         root="/Users/ben/librispeech/LibriSpeech",
         splits=("test-other",),
         layer=5,
-        utterance_batch_size=8,
+        inference_frame_budget=10_000,
         frame_batch_size=512,
         shuffle=True,
     ):
@@ -39,9 +83,24 @@ class FrameDataset(IterableDataset):
             feature_level=opensmile.FeatureLevel.LowLevelDescriptors,
         )
 
-        self.utterance_batch_size = utterance_batch_size
+        self.inference_frame_budget = inference_frame_budget
         self.frame_batch_size = frame_batch_size
         self.shuffle = shuffle
+
+        self.frame_lengths = [
+            self._estimate_wavlm_frames(sample.path)
+            for sample in self.base_dataset.rows
+        ]
+
+    @staticmethod
+    def _estimate_wavlm_frames(path) -> int:
+        info = torchaudio.info(path)
+
+        # Convert source duration to equivalent 16 kHz sample count.
+        n_16k = round(info.num_frames * 16_000 / info.sample_rate)
+
+        # WavLM frontend stride = 320 samples = 20 ms.
+        return math.ceil(n_16k / 320)
 
     @torch.inference_mode()
     def extract_frames(
@@ -128,24 +187,28 @@ class FrameDataset(IterableDataset):
         return frame_samples
 
     def __iter__(self):
-        utterance_loader = self.base_dataset.make_dataloader(
-            batch_size=self.utterance_batch_size,
+        batch_sampler = FrameBudgetBatchSampler(
+            frame_lengths=self.frame_lengths,
+            max_frames=self.inference_frame_budget,
             shuffle=self.shuffle,
+        )
+
+        utterance_loader = DataLoader(
+            self.base_dataset,
+            batch_sampler=batch_sampler,
+            collate_fn=self.base_dataset.collate_fn,
             num_workers=0,
         )
 
         residual: list[AudioSample] = []
 
         for utterance_batch in utterance_loader:
-            # Reconstruct the individual utterance samples expected by our
-            # extraction routine.
             samples = list(utterance_batch)
 
             frames = self.extract_frames(samples)
 
             pool = residual + frames
 
-            # Shuffle whole frame samples, preserving content/pitch pairing.
             if self.shuffle:
                 order = torch.randperm(len(pool)).tolist()
                 pool = [pool[i] for i in order]
@@ -160,7 +223,6 @@ class FrameDataset(IterableDataset):
 
             residual = pool[n_full_batches * self.frame_batch_size :]
 
-        # Only the final batch of the epoch may be undersized.
         if residual:
             yield AudioBatch.from_samples(residual)
 
