@@ -8,9 +8,19 @@
             "name": "debug data",
             "type": "debugpy",
             "request": "launch",
-            "module": "dataset",
+            "module": "src.train",
             "console": "integratedTerminal",
-            "justMyCode": false
+            "justMyCode": false,
+            "args": [
+                "--root",
+                "/Users/ben/librispeech/LibriSpeech",
+                "--train-split",
+                "test-other",
+                "--frame-batch-size",
+                "512",
+                "--hidden-dim",
+                "512"
+            ]
         }
     ]
 }
