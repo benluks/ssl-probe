@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+import lightning as L
 import torch
 from quick_convert.pipelines.training import (
     LightningTrainer,
@@ -35,12 +36,15 @@ def parse_args():
 
     # Output
     parser.add_argument("--out-dir", default=None)
+    parser.add_argument("--seed", type=int, default=115)
 
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+
+    L.seed_everything(args.seed, workers=True)
 
     train_dataset = FrameDataset(
         root=args.root,
