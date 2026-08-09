@@ -66,6 +66,7 @@ class FrameDataset(IterableDataset):
         root="/Users/ben/librispeech/LibriSpeech",
         splits=("test-other",),
         layer=5,
+        context_size=1,
         inference_frame_budget=10_000,
         frame_batch_size=512,
         shuffle=True,
@@ -73,6 +74,9 @@ class FrameDataset(IterableDataset):
         super().__init__()
 
         self.target = target
+        self.context_size = context_size
+        self.context_radius = context_size // 2
+
         self.base_dataset = load_dataset(
             "librispeech",
             root=root,
@@ -152,20 +156,24 @@ class FrameDataset(IterableDataset):
 
             target_values, valid = self.target.apply(raw_target)
 
-            utterance_content = utterance_content[valid]
-            target_values = target_values[valid]
+            radius = self.context_radius
 
-            frame_indices = torch.arange(n)[valid]
+            # Only frames that have enough context on both sides can act as centers.
+            for frame_idx in range(radius, n - radius):
+                # The target decides whether this CENTER frame is a valid example.
+                #
+                # For log-F0, for example, unvoiced center frames are skipped.
+                # Crucially, unvoiced neighboring frames are still retained as context.
+                if not valid[frame_idx]:
+                    continue
 
-            for encoding, target_value, frame_idx in zip(
-                utterance_content,
-                target_values,
-                frame_indices,
-                strict=True,
-            ):
+                context = utterance_content[frame_idx - radius : frame_idx + radius + 1]
+
+                target_value = target_values[frame_idx]
+
                 frame_samples.append(
                     AudioSample(
-                        utt_id=f"{sample.utt_id}:{int(frame_idx):06d}",
+                        utt_id=f"{sample.utt_id}:{frame_idx:06d}",
                         path=sample.path,
                         split=sample.split,
                         resources=ResourceCollection.from_refs(
@@ -173,7 +181,7 @@ class FrameDataset(IterableDataset):
                                 ResourceRef(
                                     name="content",
                                     kind="torch_tensor",
-                                    value=encoding,
+                                    value=context,
                                 ),
                                 ResourceRef(
                                     name=self.target.name,

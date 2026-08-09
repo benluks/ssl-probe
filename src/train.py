@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument("--train-split", default="train-clean-100")
     parser.add_argument("--val-split", default="dev-clean")
     parser.add_argument("--layer", type=int, default=5)
+    parser.add_argument("--context-size", type=int, default=1)
 
     parser.add_argument(
         "--target",
@@ -64,6 +65,7 @@ def main():
         splits=[args.train_split],
         layer=args.layer,
         target=target,
+        context_size=args.context_size,
         frame_batch_size=args.frame_batch_size,
         inference_frame_budget=10 * args.frame_batch_size,
     )
@@ -76,6 +78,7 @@ def main():
             splits=[args.val_split],
             layer=args.layer,
             target=target,
+            context_size=args.context_size,
             frame_batch_size=args.frame_batch_size,
             inference_frame_budget=10 * args.frame_batch_size,
             shuffle=False,
@@ -83,7 +86,8 @@ def main():
     )
 
     module = Probe(
-        input_dim=train_dataset.content_encoder.encoder.feature_dim,
+        input_dim=train_dataset.content_encoder.encoder.feature_dim
+        * train_dataset.context_size,
         target=target,
         hidden_dim=args.hidden_dim,
         nonlinearity=args.nonlinearity,

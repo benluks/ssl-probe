@@ -55,6 +55,8 @@ class Probe(BaseTrainingModule):
         stage: str,
     ) -> ProbeOutput:
         x = batch.resources["content"].values
+        # flatten for context sizes larger than 1
+        x = x.flatten(1)
         target = batch.resources[self.target.name].values[:, 0]
 
         output = self.probe(x)

@@ -15,13 +15,15 @@
                 "--root",
                 "/Users/ben/librispeech/LibriSpeech",
                 "--target",
-                "voiced",
+                "logf0",
+                "--context-size",
+                "3",
                 "--train-split",
                 "test-other",
                 "--val-split",
                 "test-other",
                 "--frame-batch-size",
-                "512",
+                "128",
                 "--hidden-dim",
                 "512"
             ]
