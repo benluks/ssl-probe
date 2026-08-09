@@ -12,13 +12,13 @@ TensorTransform = Callable[[torch.Tensor], torch.Tensor]
 TensorMask = Callable[[torch.Tensor], torch.Tensor]
 
 
-@dataclass(frozen=True)
+@dataclass
 class FrameTarget:
     name: str
     source: str
     task: ProbeTask
-    transform: callable | None = None
-    valid_mask: callable | None = None
+    transform: TensorTransform | None = None
+    valid_mask: TensorMask | None = None
 
     def apply(
         self,

@@ -58,6 +58,8 @@ def main():
 
     L.seed_everything(args.seed, workers=True)
 
+    config = vars(args).copy()
+
     target = TARGETS[args.target]
 
     train_dataset = FrameDataset(
@@ -126,7 +128,7 @@ def main():
         val_dataset=val_dataset,
         out_dir=out_dir,
     )
-
+    trainer.pl_trainer.logger.log_hyperparams(config)
     pipeline.run()
 
 

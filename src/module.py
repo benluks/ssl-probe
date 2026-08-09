@@ -1,5 +1,6 @@
-# pitch_probe/module.py
+from __future__ import annotations
 
+# pitch_probe/module.py
 from dataclasses import dataclass
 
 import torch
@@ -48,6 +49,8 @@ class Probe(BaseTrainingModule):
 
         self.train_metrics = target.task.make_metrics().clone(prefix="train/")
         self.val_metrics = target.task.make_metrics().clone(prefix="val/")
+
+        self.save_hyperparameters()
 
     def _shared_step(
         self,
