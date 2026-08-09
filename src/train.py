@@ -41,6 +41,8 @@ def parse_args():
     )
 
     # Optimization
+    parser.add_argument("--val-check-interval", type=int, default=1000)
+    parser.add_argument("--check-val-every-n-epoch", type=int, default=None)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--max-steps", type=int, default=10_000)
@@ -113,6 +115,8 @@ def main():
         trainer_kwargs={
             "max_steps": args.max_steps,
             "accelerator": "auto",
+            "val_check_interval": args.val_check_interval,
+            "check_val_every_n_epoch": args.check_val_every_n_epoch,
         },
     )
 
