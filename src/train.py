@@ -119,7 +119,7 @@ def main():
     out_dir = args.out_dir or (
         Path("outputs")
         / f"{args.target}"
-        / f"wavlm_l{args.layer + 1}_{args.nonlinearity}"
+        / f"wavlm_l{args.layer + 1}_{args.nonlinearity}_c{args.context_size}"
     )
 
     pipeline = TrainingPipeline(
