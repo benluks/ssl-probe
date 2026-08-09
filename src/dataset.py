@@ -66,8 +66,6 @@ class FrameBudgetBatchSampler(Sampler[list[int]]):
 
 
 class FrameDataset(IterableDataset):
-    PITCH_KEY = "F0semitoneFrom27.5Hz_sma3nz"
-
     def __init__(
         self,
         target: FrameTarget,

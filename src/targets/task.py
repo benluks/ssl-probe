@@ -108,7 +108,7 @@ class ClassificationTask(ProbeTask):
         output: torch.Tensor,
         target: torch.Tensor,
     ) -> TaskOutput:
-        target = target.squeeze(-1).long()
+        target = target.long().flatten()
 
         probabilities = output.softmax(dim=-1)
 

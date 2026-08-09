@@ -6,7 +6,12 @@ from dataclasses import dataclass
 
 import torch
 
-from .task import BinaryClassificationTask, ProbeTask, RegressionTask
+from .task import (
+    BinaryClassificationTask,
+    ClassificationTask,
+    ProbeTask,
+    RegressionTask,
+)
 
 TensorTransform = Callable[[torch.Tensor], torch.Tensor]
 TensorMask = Callable[[torch.Tensor], torch.Tensor]
@@ -56,15 +61,17 @@ def nonzero(x: torch.Tensor) -> torch.Tensor:
 def to_voiced(x: torch.Tensor) -> torch.Tensor:
     return (x > 0).long()
 
+
 MIN_SEMITONE = 12
 MAX_SEMITONE = 60
+
 
 def to_semitone_class(x: torch.Tensor) -> torch.Tensor:
     return x.round().long() - MIN_SEMITONE
 
+
 def valid_pitch_class(x: torch.Tensor) -> torch.Tensor:
     return (x >= MIN_SEMITONE) & (x <= MAX_SEMITONE)
-
 
 
 LOG_F0 = FrameTarget(
@@ -75,7 +82,11 @@ LOG_F0 = FrameTarget(
     valid_mask=nonzero,
 )
 
-# SEMITONE = 
+SEMITONE = FrameTarget(
+    name="semitone",
+    source="F0semitoneFrom27.5Hz_sma3nz",
+    task=ClassificationTask(MAX_SEMITONE - MIN_SEMITONE),
+)
 
 LOUDNESS = FrameTarget(
     name="loudness",
@@ -98,4 +109,10 @@ VOICED = FrameTarget(
 )
 
 
-TARGETS = {"logf0": LOG_F0, "voiced": VOICED, "loudness": LOUDNESS, "f1": F1}
+TARGETS = {
+    "logf0": LOG_F0,
+    "voiced": VOICED,
+    "loudness": LOUDNESS,
+    "f1": F1,
+    "semitone": SEMITONE,
+}

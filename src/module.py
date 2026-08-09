@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# pitch_probe/module.py
 from dataclasses import dataclass
 
 import torch
@@ -38,7 +37,7 @@ class Probe(BaseTrainingModule):
         layers = []
         in_dim = input_dim
 
-        output_dims = [*hidden_dim, 1]
+        output_dims = [*hidden_dim, target.task.output_dim]
         for i, dim in enumerate(output_dims):
             layers.append(nn.Linear(in_dim, dim))
             if i != len(output_dims) - 1:

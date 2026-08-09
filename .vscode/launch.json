@@ -15,7 +15,7 @@
                 "--root",
                 "/Users/ben/librispeech/LibriSpeech",
                 "--target",
-                "logf0",
+                "semitone",
                 "--context-size",
                 "3",
                 "--train-split",
