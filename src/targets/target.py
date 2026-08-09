@@ -85,7 +85,7 @@ LOG_F0 = FrameTarget(
 SEMITONE = FrameTarget(
     name="semitone",
     source="F0semitoneFrom27.5Hz_sma3nz",
-    task=ClassificationTask(MAX_SEMITONE - MIN_SEMITONE),
+    task=ClassificationTask(MAX_SEMITONE - MIN_SEMITONE + 1),
 )
 
 LOUDNESS = FrameTarget(
