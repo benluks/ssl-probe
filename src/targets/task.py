@@ -112,15 +112,18 @@ class ClassificationTask(ProbeTask):
 
         probabilities = output.softmax(dim=-1)
 
-        return TaskOutput(
-            loss=F.cross_entropy(
-                output,
-                target,
-            ),
-            prediction=output.argmax(dim=-1),
-            metric_input=probabilities,
-            metric_target=target,
-        )
+        try:
+            return TaskOutput(
+                loss=F.cross_entropy(
+                    output,
+                    target,
+                ),
+                prediction=output.argmax(dim=-1),
+                metric_input=probabilities,
+                metric_target=target,
+            )
+        except RuntimeError:
+            raise
 
     def make_metrics(self) -> MetricCollection:
         return MetricCollection(
