@@ -56,6 +56,16 @@ def nonzero(x: torch.Tensor) -> torch.Tensor:
 def to_voiced(x: torch.Tensor) -> torch.Tensor:
     return (x > 0).long()
 
+MIN_SEMITONE = 12
+MAX_SEMITONE = 60
+
+def to_semitone_class(x: torch.Tensor) -> torch.Tensor:
+    return x.round().long() - MIN_SEMITONE
+
+def valid_pitch_class(x: torch.Tensor) -> torch.Tensor:
+    return (x >= MIN_SEMITONE) & (x <= MAX_SEMITONE)
+
+
 
 LOG_F0 = FrameTarget(
     name="logf0",
@@ -64,6 +74,8 @@ LOG_F0 = FrameTarget(
     transform=semitone_to_log_hz,
     valid_mask=nonzero,
 )
+
+# SEMITONE = 
 
 LOUDNESS = FrameTarget(
     name="loudness",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+import warnings
 
 import opensmile
 import torch
@@ -13,6 +14,13 @@ from quick_convert.data.resources import ResourceCollection, ResourceRef
 from torch.utils.data import DataLoader, IterableDataset, Sampler
 
 from .targets import FrameTarget
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Support for mismatched key_padding_mask and attn_mask is deprecated.*",
+    category=UserWarning,
+    module=r"torch\.nn\.functional",
+)
 
 
 class FrameBudgetBatchSampler(Sampler[list[int]]):
