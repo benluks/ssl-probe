@@ -4,7 +4,13 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 from quick_convert.utils import ConfigurableDevice
-from torchmetrics import MeanAbsoluteError, MeanSquaredError, MetricCollection, R2Score
+from torchmetrics import (
+    MeanAbsoluteError,
+    MeanSquaredError,
+    Metric,
+    MetricCollection,
+    R2Score,
+)
 from torchmetrics.classification import (
     BinaryAccuracy,
     BinaryAUROC,
@@ -112,24 +118,27 @@ class ClassificationTask(ProbeTask):
 
         probabilities = output.softmax(dim=-1)
 
-        try:
-            return TaskOutput(
-                loss=F.cross_entropy(
-                    output,
-                    target,
-                ),
-                prediction=output.argmax(dim=-1),
-                metric_input=probabilities,
-                metric_target=target,
-            )
-        except RuntimeError:
-            raise
+        return TaskOutput(
+            loss=F.cross_entropy(
+                output,
+                target,
+            ),
+            prediction=output.argmax(dim=-1),
+            metric_input=probabilities,
+            metric_target=target,
+        )
 
     def make_metrics(self) -> MetricCollection:
         return MetricCollection(
             {
-                "accuracy": MulticlassAccuracy(
-                    num_classes=self.num_classes,
+                "top1_accuracy": MulticlassAccuracy(
+                    num_classes=self.num_classes, top_k=1
+                ),
+                "top3_accuracy": MulticlassAccuracy(
+                    num_classes=self.num_classes, top_k=3
+                ),
+                "top5_accuracy": MulticlassAccuracy(
+                    num_classes=self.num_classes, top_k=5
                 ),
                 "f1": MulticlassF1Score(
                     num_classes=self.num_classes,
@@ -137,3 +146,50 @@ class ClassificationTask(ProbeTask):
                 ),
             }
         )
+
+
+# for mel/semitone bin classification: independently sampled classes whose indices indicate closeness (e.g. 20 ~ 21; 20 !~ 43)
+class ExpectedBinError(Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state(
+            "error_sum",
+            default=torch.tensor(0.0),
+            dist_reduce_fx="sum",
+        )
+        self.add_state(
+            "count",
+            default=torch.tensor(0),
+            dist_reduce_fx="sum",
+        )
+
+    def update(
+        self,
+        probabilities: torch.Tensor,
+        target: torch.Tensor,
+    ):
+        bins = torch.arange(
+            probabilities.shape[-1],
+            device=probabilities.device,
+        )
+
+        distances = (bins[None, :] - target[:, None]).abs()
+
+        error = (probabilities * distances).sum(dim=-1)
+
+        self.error_sum += error.sum()
+        self.count += target.numel()
+
+    def compute(self):
+        return self.error_sum / self.count
+
+
+class BinClassificationTask(ClassificationTask):
+    def make_metrics(self) -> MetricCollection:
+        metrics = super().make_metrics()
+        metrics.add_metrics(
+            {
+                "expected_bin_error": ExpectedBinError(),
+            }
+        )
+        return metrics

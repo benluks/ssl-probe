@@ -8,7 +8,7 @@ import torch
 
 from .task import (
     BinaryClassificationTask,
-    ClassificationTask,
+    BinClassificationTask,
     ProbeTask,
     RegressionTask,
 )
@@ -85,7 +85,7 @@ LOG_F0 = FrameTarget(
 SEMITONE = FrameTarget(
     name="semitone",
     source="F0semitoneFrom27.5Hz_sma3nz",
-    task=ClassificationTask(MAX_SEMITONE - MIN_SEMITONE + 1),
+    task=BinClassificationTask(MAX_SEMITONE - MIN_SEMITONE + 1),
     transform=to_semitone_class,
     valid_mask=valid_pitch_class,
 )
