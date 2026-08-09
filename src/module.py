@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 
 import torch
-import torch.nn.functional as F
 from quick_convert.data import AudioBatch
 from quick_convert.pipelines.training import BaseTrainingModule, Optimization
 from torch import nn
-from torchmetrics.regression import R2Score
+
+from .targets import FrameTarget
 
 NONLINEARITIES = {"relu": nn.ReLU, "gelu": nn.GELU, "none": nn.Identity}
 
@@ -24,6 +24,7 @@ class Probe(BaseTrainingModule):
         self,
         input_dim: int,
         optimization: Optimization,
+        target: FrameTarget,
         hidden_dim: list[int] | None = None,
         nonlinearity: str = "gelu",
     ) -> None:
@@ -43,34 +44,45 @@ class Probe(BaseTrainingModule):
                 layers.append(NONLINEARITIES[nonlinearity]())
             in_dim = dim
         self.probe = nn.Sequential(*layers)
-        self.r2 = R2Score()
+        self.target = target
+
+        self.train_metrics = target.task.make_metrics().clone(prefix="train/")
+        self.val_metrics = target.task.make_metrics().clone(prefix="val/")
 
     def _shared_step(
         self,
         batch: AudioBatch,
         stage: str,
     ) -> ProbeOutput:
-        ssl = batch.resources["content"].values
-        pitch = batch.resources["pitch"].values.squeeze(-1)
+        x = batch.resources["content"].values
+        target = batch.resources[self.target.name].values[:, 0]
 
-        pred = self.probe(ssl).squeeze(-1)
-
-        loss = F.mse_loss(pred, pitch)
+        output = self.probe(x)
+        result = self.target.task.compute(output, target)
 
         self.log(
             f"{stage}/loss",
-            loss,
+            result.loss,
             on_step=stage == "train",
-            on_epoch=True,
-            prog_bar=True,
-        )
-        self.log(
-            f"{stage}/r2",
-            self.r2(pred.detach(), pitch.detach()),
-            on_step=False,
             on_epoch=True,
             prog_bar=True,
             batch_size=len(batch),
         )
 
-        return ProbeOutput(loss=loss, prediction=pred, batch_size=len(batch))
+        metrics = self.train_metrics if stage == "train" else self.val_metrics
+
+        metrics.update(
+            result.metric_input,
+            result.metric_target,
+        )
+
+        self.log_dict(
+            metrics,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+        )
+
+        return ProbeOutput(
+            loss=result.loss, prediction=result.prediction, batch_size=len(batch)
+        )

@@ -12,6 +12,7 @@ from quick_convert.pipelines.training.optim.base import LinearWarmup
 
 from .dataset import FrameDataset
 from .module import Probe
+from .targets import TARGETS
 
 
 def parse_args():
@@ -22,10 +23,20 @@ def parse_args():
     parser.add_argument("--train-split", default="train-clean-100")
     parser.add_argument("--val-split", default="dev-clean")
     parser.add_argument("--layer", type=int, default=5)
+
+    parser.add_argument(
+        "--target",
+        choices=TARGETS,
+        default="pitch",
+    )
+
     parser.add_argument("--frame-batch-size", type=int, default=8192)
     parser.add_argument("--hidden-dim", type=int, nargs="+", default=[])
+
     parser.add_argument(
-        "--nonlinearity", type=str, choices=["relu", "gelu", "none"], default="gelu"
+        "--nonlinearity",
+        choices=["relu", "gelu", "none"],
+        default="gelu",
     )
 
     # Optimization
@@ -46,28 +57,36 @@ def main():
 
     L.seed_everything(args.seed, workers=True)
 
+    target = TARGETS[args.target]
+
     train_dataset = FrameDataset(
         root=args.root,
         splits=[args.train_split],
         layer=args.layer,
+        target=target,
         frame_batch_size=args.frame_batch_size,
         inference_frame_budget=10 * args.frame_batch_size,
     )
 
-    if args.val_split is None:
-        val_dataset = None
-    else:
-        val_dataset = FrameDataset(
+    val_dataset = (
+        None
+        if args.val_split is None
+        else FrameDataset(
             root=args.root,
             splits=[args.val_split],
             layer=args.layer,
+            target=target,
             frame_batch_size=args.frame_batch_size,
             inference_frame_budget=10 * args.frame_batch_size,
+            shuffle=False,
         )
+    )
 
     module = Probe(
         input_dim=train_dataset.content_encoder.encoder.feature_dim,
+        target=target,
         hidden_dim=args.hidden_dim,
+        nonlinearity=args.nonlinearity,
         optimization=Optimization(
             optimizer=torch.optim.AdamW,
             optimizer_kwargs={
@@ -91,9 +110,10 @@ def main():
         },
     )
 
-    out_dir = (
-        args.out_dir
-        or Path("outputs") / f"wavlm_l{args.layer + 1}_{args.nonlinearity or ''}"
+    out_dir = args.out_dir or (
+        Path("outputs")
+        / f"{args.target}"
+        / f"wavlm_l{args.layer + 1}_{args.nonlinearity}"
     )
 
     pipeline = TrainingPipeline(

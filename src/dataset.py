@@ -12,6 +12,8 @@ from quick_convert.data import AudioBatch, AudioSample, load_dataset
 from quick_convert.data.resources import ResourceCollection, ResourceRef
 from torch.utils.data import DataLoader, IterableDataset, Sampler
 
+from .targets import FrameTarget
+
 
 class FrameBudgetBatchSampler(Sampler[list[int]]):
     def __init__(
@@ -60,6 +62,7 @@ class FrameDataset(IterableDataset):
 
     def __init__(
         self,
+        target: FrameTarget,
         root="/Users/ben/librispeech/LibriSpeech",
         splits=("test-other",),
         layer=5,
@@ -69,6 +72,7 @@ class FrameDataset(IterableDataset):
     ):
         super().__init__()
 
+        self.target = target
         self.base_dataset = load_dataset(
             "librispeech",
             root=root,
@@ -130,36 +134,33 @@ class FrameDataset(IterableDataset):
                 int(sample.sample_rate),
             )
 
-            f0_semitones = torch.tensor(
-                smile_features[self.PITCH_KEY].to_numpy(),
+            raw_target = torch.tensor(
+                smile_features[self.target.source].to_numpy(),
                 dtype=torch.float32,
             )
 
-            # openSMILE: 10 ms hop
-            # WavLM:     20 ms hop
-            f0_semitones = f0_semitones[::2]
+            # openSMILE = 10 ms hop, WavLM = 20 ms hop.
+            raw_target = raw_target[::2]
 
             n = min(
                 utterance_content.shape[0],
-                f0_semitones.shape[0],
+                raw_target.shape[0],
             )
 
             utterance_content = utterance_content[:n]
-            f0_semitones = f0_semitones[:n]
+            raw_target = raw_target[:n]
 
-            voiced = f0_semitones > 0
+            target_values, valid = self.target.apply(raw_target)
 
-            utterance_content = utterance_content[voiced]
-            f0_semitones = f0_semitones[voiced]
+            utterance_content = utterance_content[valid]
+            target_values = target_values[valid]
 
-            log_f0 = math.log(27.5) + f0_semitones * (math.log(2.0) / 12.0)
+            frame_indices = torch.arange(n)[valid]
 
-            original_frame_indices = torch.arange(n)[voiced]
-
-            for encoding, pitch, frame_idx in zip(
+            for encoding, target_value, frame_idx in zip(
                 utterance_content,
-                log_f0,
-                original_frame_indices,
+                target_values,
+                frame_indices,
                 strict=True,
             ):
                 frame_samples.append(
@@ -175,9 +176,9 @@ class FrameDataset(IterableDataset):
                                     value=encoding,
                                 ),
                                 ResourceRef(
-                                    name="pitch",
+                                    name=self.target.name,
                                     kind="torch_tensor",
-                                    value=pitch.unsqueeze(0),
+                                    value=target_value.reshape(1),
                                 ),
                             ]
                         ),
