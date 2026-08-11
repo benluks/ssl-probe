@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
-from quick_convert.utils import ConfigurableDevice
+from quick_convert.utils import DeviceLike
 from torchmetrics import (
     MeanAbsoluteError,
     MeanSquaredError,
@@ -30,7 +30,7 @@ class TaskOutput:
 
 class ProbeTask(ABC):
     output_dim: int
-    device: ConfigurableDevice
+    device: DeviceLike
 
     @abstractmethod
     def compute(

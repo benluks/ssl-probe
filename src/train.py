@@ -3,6 +3,8 @@ from pathlib import Path
 
 import lightning as L
 import torch
+from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+from lightning.pytorch.loggers import WandbLogger
 from quick_convert.pipelines.training import (
     LightningTrainer,
     Optimization,
@@ -109,6 +111,12 @@ def main():
         ),
     )
 
+    out_dir = args.out_dir or (
+        Path("outputs")
+        / f"{args.target}"
+        / f"wavlm_l{args.layer + 1}_{args.nonlinearity}_c{args.context_size}"
+    )
+
     trainer = LightningTrainer(
         module=module,
         train_dataloader_kwargs={},
@@ -117,13 +125,19 @@ def main():
             "accelerator": "auto",
             "val_check_interval": args.val_check_interval,
             "check_val_every_n_epoch": args.check_val_every_n_epoch,
+            "callbacks": [
+                ModelCheckpoint(
+                    save_top_k=2,
+                    monitor="step",
+                    mode="max",
+                    save_last=False,
+                    save_on_train_epoch_end=False,
+                ),
+                ModelCheckpoint(monitor="val/loss", mode="min", save_last=False),
+                LearningRateMonitor(logging_interval="step"),
+            ],
+            "logger": WandbLogger(save_dir=out_dir, project="ssl-probe"),
         },
-    )
-
-    out_dir = args.out_dir or (
-        Path("outputs")
-        / f"{args.target}"
-        / f"wavlm_l{args.layer + 1}_{args.nonlinearity}_c{args.context_size}"
     )
 
     pipeline = TrainingPipeline(
