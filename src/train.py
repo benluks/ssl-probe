@@ -111,11 +111,11 @@ def main():
         ),
     )
 
-    out_dir = args.out_dir or (
-        Path("outputs")
-        / f"{args.target}"
+    run_name = Path(
+        f"{args.target}"
         / f"wavlm_l{args.layer + 1}_{args.nonlinearity}_c{args.context_size}"
     )
+    out_dir = args.out_dir or (Path("outputs") / run_name)
 
     trainer = LightningTrainer(
         module=module,
@@ -136,7 +136,7 @@ def main():
                 ModelCheckpoint(monitor="val/loss", mode="min", save_last=False),
                 LearningRateMonitor(logging_interval="step"),
             ],
-            "logger": WandbLogger(save_dir=out_dir, project="ssl-probe"),
+            "logger": WandbLogger(name=run_name, save_dir=out_dir, project="ssl-probe"),
         },
     )
 
