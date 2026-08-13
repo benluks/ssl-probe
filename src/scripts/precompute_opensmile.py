@@ -10,6 +10,8 @@ import opensmile
 from quick_convert.data import load_dataset
 from tqdm import tqdm
 
+from opensmile_factory import init_opensmile
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -41,7 +43,7 @@ def main():
     feature_set = opensmile.FeatureSet.eGeMAPSv02
     feature_level = opensmile.FeatureLevel.LowLevelDescriptors
 
-    smile = opensmile.Smile(
+    smile = init_opensmile(
         feature_set=feature_set,
         feature_level=feature_level,
     )
