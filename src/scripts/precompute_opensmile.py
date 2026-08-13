@@ -15,11 +15,14 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--root", required=True)
+    parser.add_argument("--dataset", default=None)
     parser.add_argument("--split", required=True)
     parser.add_argument(
         "--out-root",
         default="features/opensmile",
     )
+    parser.add_argument("--out-folder", default=None)
+    parser.add_argument("--utt-id-template", default="{path.stem}")
 
     return parser.parse_args()
 
@@ -28,10 +31,11 @@ def main():
     args = parse_args()
 
     dataset = load_dataset(
-        "librispeech",
+        name=args.dataset,
         root=args.root,
         splits=[args.split],
         load=["audio"],
+        utt_id_template=args.utt_id_template,
     )
 
     feature_set = opensmile.FeatureSet.eGeMAPSv02
@@ -42,7 +46,13 @@ def main():
         feature_level=feature_level,
     )
 
-    out_dir = Path(args.out_root) / args.split
+    out_folder = args.out_folder or args.dataset
+    if out_folder is None:
+        raise ValueError(
+            "you must set a dataset name in --dataset or pass --out-folder"
+        )
+
+    out_dir = Path(args.out_root) / out_folder / args.split
     out_dir.mkdir(parents=True, exist_ok=True)
 
     metadata = {
