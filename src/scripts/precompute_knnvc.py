@@ -18,7 +18,7 @@ def parse_args():
     parser.add_argument("--splits", nargs="+", required=True)
     parser.add_argument(
         "--out-root",
-        default=Path("outputs"),
+        default=Path("features"),
     )
     parser.add_argument("--out-folder", default=None)
     parser.add_argument(
