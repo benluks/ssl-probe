@@ -10,7 +10,7 @@ import opensmile
 from quick_convert.data import load_dataset
 from tqdm import tqdm
 
-from opensmile_factory import init_opensmile
+from ..opensmile_factory import init_opensmile
 
 
 def parse_args():
@@ -18,7 +18,7 @@ def parse_args():
 
     parser.add_argument("--root", required=True)
     parser.add_argument("--dataset", default=None)
-    parser.add_argument("--split", required=True)
+    parser.add_argument("--splits", nargs="+", required=True)
     parser.add_argument(
         "--out-root",
         default="features/opensmile",
@@ -35,7 +35,7 @@ def main():
     dataset = load_dataset(
         name=args.dataset,
         root=args.root,
-        splits=[args.split],
+        splits=args.splits,
         load=["audio"],
         utt_id_template=args.utt_id_template,
     )
@@ -54,22 +54,26 @@ def main():
             "you must set a dataset name in --dataset or pass --out-folder"
         )
 
-    out_dir = Path(args.out_root) / out_folder / args.split
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(args.out_root) / out_folder
+    for split in args.splits:
+        split_dir = out_dir / split
+        split_dir.mkdir(parents=True, exist_ok=True)
 
-    metadata = {
-        "feature_set": feature_set.name,
-        "feature_level": feature_level.name,
-        "split": args.split,
-    }
+        metadata = {
+            "feature_set": feature_set.name,
+            "feature_level": feature_level.name,
+            "split": split,
+        }
 
-    (out_dir / "_metadata.json").write_text(json.dumps(metadata, indent=2))
+        (split_dir / "_metadata.json").write_text(json.dumps(metadata, indent=2))
 
-    for sample in tqdm(dataset, desc=args.split):
-        out_path = out_dir / f"{sample.utt_id}.parquet"
+    for sample in tqdm(dataset, desc="+".join(args.splits)):
+        out_path = out_dir / sample.split / f"{sample.utt_id}.parquet"
 
         if out_path.exists():
             continue
+
+        # out_path.parent.mkdir(parents=True, exist_ok=True)
 
         waveform = sample.waveform
 
