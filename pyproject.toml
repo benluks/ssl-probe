@@ -8,6 +8,8 @@ dependencies = [
     "lightning>=2.6.5",
     "opensmile>=2.6.0",
     "quick-convert",
+    "scikit-learn>=1.9.0",
+    "scipy>=1.17.1",
     "torchmetrics>=1.9.0",
     "transformers>=5.14.1",
     "wandb>=0.28.1",

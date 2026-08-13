@@ -4,7 +4,6 @@ import math
 import random
 import warnings
 
-import opensmile
 import torch
 import torchaudio
 from quick_convert.components.feature_extractors.content import ContentFeatureExtractor
@@ -13,7 +12,9 @@ from quick_convert.data import AudioBatch, AudioSample, load_dataset
 from quick_convert.data.resources import ResourceCollection, ResourceRef
 from torch.utils.data import DataLoader, IterableDataset, Sampler
 
-from .targets import FrameTarget
+from targets.target import FrameTarget
+
+from .opensmile_factory import init_opensmile
 
 warnings.filterwarnings(
     "ignore",
@@ -92,10 +93,7 @@ class FrameDataset(IterableDataset):
 
         self.content_encoder = ContentFeatureExtractor(WavLMContentEncoder(layer=layer))
 
-        self.smile = opensmile.Smile(
-            feature_set=opensmile.FeatureSet.eGeMAPSv02,
-            feature_level=opensmile.FeatureLevel.LowLevelDescriptors,
-        )
+        self.smile = init_opensmile()
 
         self.inference_frame_budget = inference_frame_budget
         self.frame_batch_size = frame_batch_size
