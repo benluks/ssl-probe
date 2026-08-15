@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import random
 import warnings
+from os import PathLike
 
 import torch
 import torchaudio
@@ -12,9 +13,7 @@ from quick_convert.data import AudioBatch, AudioSample, load_dataset
 from quick_convert.data.resources import ResourceCollection, ResourceRef
 from torch.utils.data import DataLoader, IterableDataset, Sampler
 
-from targets.target import FrameTarget
-
-from .opensmile_factory import init_opensmile
+from .targets import FrameTarget, SmileParquetStore
 
 warnings.filterwarnings(
     "ignore",
@@ -70,13 +69,16 @@ class FrameDataset(IterableDataset):
     def __init__(
         self,
         target: FrameTarget,
+        smile_root: PathLike,
         root="/Users/ben/librispeech/LibriSpeech",
+        dataset_name: str | None = "librispeech",
         splits=("test-other",),
         layer=5,
         context_size=1,
         inference_frame_budget=10_000,
         frame_batch_size=512,
         shuffle=True,
+        audio_root=None,
     ):
         super().__init__()
 
@@ -85,7 +87,7 @@ class FrameDataset(IterableDataset):
         self.context_radius = context_size // 2
 
         self.base_dataset = load_dataset(
-            "librispeech",
+            dataset_name,
             root=root,
             splits=list(splits),
             load=["audio"],
@@ -93,7 +95,11 @@ class FrameDataset(IterableDataset):
 
         self.content_encoder = ContentFeatureExtractor(WavLMContentEncoder(layer=layer))
 
-        self.smile = init_opensmile()
+        self.smile_features = SmileParquetStore(
+            smile_root=smile_root,
+            feature_column=self.target.source,
+            audio_root=audio_root,
+        )
 
         self.inference_frame_budget = inference_frame_budget
         self.frame_batch_size = frame_batch_size
@@ -132,20 +138,7 @@ class FrameDataset(IterableDataset):
             else:
                 utterance_content = content[batch_idx]
 
-            waveform = sample.waveform
-
-            if waveform.ndim == 2 and waveform.shape[0] == 1:
-                waveform = waveform.squeeze(0)
-
-            smile_features = self.smile.process_signal(
-                waveform.detach().cpu().numpy(),
-                int(sample.sample_rate),
-            )
-
-            raw_target = torch.tensor(
-                smile_features[self.target.source].to_numpy(),
-                dtype=torch.float32,
-            )
+            raw_target = self.smile_features[sample.utt_id]
 
             # openSMILE = 10 ms hop, WavLM = 20 ms hop.
             raw_target = raw_target[::2]

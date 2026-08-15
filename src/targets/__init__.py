@@ -1,3 +1,4 @@
+from .smile_parquet_store import SmileParquetStore
 from .target import TARGETS, FrameTarget
 from .task import BinaryAccuracy, ClassificationTask, RegressionTask
 
@@ -7,4 +8,5 @@ __all__ = [
     "ClassificationTask",
     "FrameTarget",
     "RegressionTask",
+    "SmileParquetStore",
 ]

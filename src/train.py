@@ -22,9 +22,10 @@ def parse_args():
 
     # Data / representation
     parser.add_argument("--root", required=True)
+    parser.add_argument("--dataset", type=str, default="librispeech")
     parser.add_argument("--train-split", default="train-clean-100")
     parser.add_argument("--val-split", default="dev-clean")
-    parser.add_argument("--layer", type=int, default=5)
+    parser.add_argument("--layer", type=int, default=6)
     parser.add_argument("--context-size", type=int, default=1)
 
     parser.add_argument(
@@ -49,10 +50,16 @@ def parse_args():
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--max-steps", type=int, default=10_000)
     parser.add_argument("--warmup", type=float, default=0.05)
+    parser.add_argument(
+        "--smile-root",
+        type=Path,
+        default="features/opensmile/knnvc_original_librispeech",
+    )
 
     # Output
     parser.add_argument("--out-dir", default=None)
     parser.add_argument("--seed", type=int, default=115)
+    parser.add_argument("--conversion", default="knnvc_original")
 
     return parser.parse_args()
 
@@ -69,6 +76,7 @@ def main():
     train_dataset = FrameDataset(
         root=args.root,
         splits=[args.train_split],
+        smile_root=args.smile_root / args.train_split,
         layer=args.layer,
         target=target,
         context_size=args.context_size,
@@ -82,6 +90,7 @@ def main():
         else FrameDataset(
             root=args.root,
             splits=[args.val_split],
+            smile_root=args.smile_root / args.val_split,
             layer=args.layer,
             target=target,
             context_size=args.context_size,
@@ -111,10 +120,11 @@ def main():
         ),
     )
 
-    run_name = Path(
-        f"{args.target}"
-        / f"wavlm_l{args.layer + 1}_{args.nonlinearity}_c{args.context_size}"
+    run_name = (
+        Path(f"{args.target}")
+        / f"{args.conversion}_{args.dataset}_wavlm_l{args.layer}_{args.nonlinearity}_c{args.context_size}"
     )
+
     out_dir = args.out_dir or (Path("outputs") / run_name)
 
     trainer = LightningTrainer(
@@ -136,7 +146,9 @@ def main():
                 ModelCheckpoint(monitor="val/loss", mode="min", save_last=False),
                 LearningRateMonitor(logging_interval="step"),
             ],
-            "logger": WandbLogger(name=run_name, save_dir=out_dir, project="ssl-probe"),
+            "logger": WandbLogger(
+                name=str(run_name), save_dir=out_dir, project="ssl-probe"
+            ),
         },
     )
 
