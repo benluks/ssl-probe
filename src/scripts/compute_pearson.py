@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 
 @dataclass
@@ -209,7 +210,7 @@ def compute_split_correlations(
 
     total_frames = 0
 
-    for index, utt_id in enumerate(common_utt_ids, start=1):
+    for index, utt_id in tqdm(enumerate(common_utt_ids, start=1), total=len(common_utt_ids)):
         original, converted, current_features = load_feature_pair(
             original_files[utt_id],
             converted_files[utt_id],
