@@ -16,4 +16,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-quick-convert = { path = "../psst-main", editable = true }
+quick-convert = { path = "../quick-convert", editable = true }
