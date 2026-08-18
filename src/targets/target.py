@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 
@@ -28,6 +29,7 @@ class FrameTarget:
     def apply(
         self,
         values: torch.Tensor,
+        **transform_kwargs: Any,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Transform raw feature values and return values + valid mask."""
 
@@ -41,13 +43,27 @@ class FrameTarget:
             mask &= self.valid_mask(values)
 
         if self.transform is not None:
-            values = self.transform(values)
+            values = self.transform(values, **transform_kwargs)
 
         return values, mask
 
 
 def semitone_to_log_hz(x: torch.Tensor) -> torch.Tensor:
     return math.log(27.5) + x * (math.log(2.0) / 12.0)
+
+
+def semitone_to_speaker_normalized_log_hz(
+    x: torch.Tensor,
+    *,
+    speaker_mean_log_f0: float | torch.Tensor,
+    **_,
+) -> torch.Tensor:
+    log_f0 = semitone_to_log_hz(x)
+    return log_f0 - torch.as_tensor(
+        speaker_mean_log_f0,
+        device=x.device,
+        dtype=log_f0.dtype,
+    )
 
 
 def identity(x: torch.Tensor) -> torch.Tensor:
@@ -79,8 +95,18 @@ LOG_F0 = FrameTarget(
     source="F0semitoneFrom27.5Hz_sma3nz",
     task=RegressionTask(),
     transform=semitone_to_log_hz,
-    valid_mask=nonzero,
+    valid_mask=valid_pitch_class,
 )
+
+
+SPEAKER_NORMALIZED_LOG_F0 = FrameTarget(
+    name="speaker_normalized_logf0",
+    source="F0semitoneFrom27.5Hz_sma3nz",
+    task=RegressionTask(),
+    transform=semitone_to_speaker_normalized_log_hz,
+    valid_mask=valid_pitch_class,
+)
+
 
 SEMITONE = FrameTarget(
     name="semitone",
