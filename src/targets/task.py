@@ -77,7 +77,7 @@ class BinaryClassificationTask(ProbeTask):
 
     def compute(self, output, target):
         # logits have 1 extra dim
-        logits = output.squeeze(-1)
+        logits = output
         target = target.float()
 
         self.device = target.device
