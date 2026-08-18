@@ -1,4 +1,4 @@
-uv run src.train \
+uv run -m src.train \
     --target loudness \
     --root /tmp/u036742/librispeech/LibriSpeech \
     --smile-root features/opensmile/knnvc_original_librispeech/ \
