@@ -18,6 +18,16 @@ TensorTransform = Callable[[torch.Tensor], torch.Tensor]
 TensorMask = Callable[[torch.Tensor], torch.Tensor]
 
 
+MIN_SEMITONE = 12
+MAX_SEMITONE = 60
+
+F1_MIN_HZ = 150
+F1_MAX_HZ = 1500
+FREQ_BINS_PER_OCTAVE = 24
+
+F1_NUM_CLASSES = math.ceil(FREQ_BINS_PER_OCTAVE * math.log2(F1_MAX_HZ / F1_MIN_HZ))
+
+
 @dataclass
 class FrameTarget:
     name: str
@@ -45,7 +55,12 @@ class FrameTarget:
             mask &= self.valid_mask(values)
 
         if self.transform is not None:
-            values = self.transform(values, **transform_kwargs)
+            transformed = values.clone()
+            transformed[mask] = self.transform(
+                values[mask],
+                **transform_kwargs,
+            )
+            values = transformed
 
         return values, mask
 
@@ -73,15 +88,11 @@ def identity(x: torch.Tensor) -> torch.Tensor:
 
 
 def nonzero(x: torch.Tensor) -> torch.Tensor:
-    return x > 0
+    return x != 0
 
 
 def to_voiced(x: torch.Tensor) -> torch.Tensor:
     return (x > 0).long()
-
-
-MIN_SEMITONE = 12
-MAX_SEMITONE = 60
 
 
 def to_semitone_class(x: torch.Tensor) -> torch.Tensor:
@@ -92,13 +103,34 @@ def valid_pitch_class(x: torch.Tensor) -> torch.Tensor:
     return (x >= MIN_SEMITONE) & (x <= MAX_SEMITONE)
 
 
-LOG_F0 = FrameTarget(
-    name="logf0",
-    source="F0semitoneFrom27.5Hz_sma3nz",
-    task=RegressionTask(),
-    transform=semitone_to_log_hz,
-    valid_mask=valid_pitch_class,
-)
+def positive(x: torch.Tensor) -> torch.Tensor:
+    return x > 0
+
+
+def finite(x: torch.Tensor) -> torch.Tensor:
+    return torch.isfinite(x)
+
+
+def log_positive(x: torch.Tensor) -> torch.Tensor:
+    return torch.log(x)
+
+
+def log1p(x: torch.Tensor) -> torch.Tensor:
+    return torch.log1p(x)
+
+
+def frequency_range(min_hz: float, max_hz: float):
+    def mask(x: torch.Tensor) -> torch.Tensor:
+        return (x >= min_hz) & (x <= max_hz)
+
+    return mask
+
+
+def frequency_bins(min_hz: float, bins_per_octave: int):
+    def transform(x: torch.Tensor) -> torch.Tensor:
+        return torch.floor(bins_per_octave * torch.log2(x / min_hz)).long()
+
+    return transform
 
 
 def speaker_log_f0_kwargs(sample, stores):
@@ -115,6 +147,15 @@ def speaker_log_f0_kwargs(sample, stores):
     return {
         "speaker_mean_log_f0": speaker_mean,
     }
+
+
+LOG_F0 = FrameTarget(
+    name="logf0",
+    source="F0semitoneFrom27.5Hz_sma3nz",
+    task=RegressionTask(),
+    transform=semitone_to_log_hz,
+    valid_mask=valid_pitch_class,
+)
 
 
 SPEAKER_NORMALIZED_LOG_F0 = FrameTarget(
@@ -146,6 +187,32 @@ F1 = FrameTarget(
     name="f1",
     source="F1frequency_sma3nz",
     task=RegressionTask(),
+    transform=log_positive,
+    valid_mask=frequency_range(F1_MIN_HZ, F1_MAX_HZ),
+)
+
+F2 = FrameTarget(
+    name="f2",
+    source="F2frequency_sma3nz",
+    task=RegressionTask(),
+    transform=log_positive,
+    valid_mask=positive,
+)
+
+F3 = FrameTarget(
+    name="f3",
+    source="F3frequency_sma3nz",
+    task=RegressionTask(),
+    transform=log_positive,
+    valid_mask=positive,
+)
+
+F1_BIN = FrameTarget(
+    name="f1_bin",
+    source="F1frequency_sma3nz",
+    task=BinClassificationTask(F1_NUM_CLASSES),
+    transform=frequency_bins(F1_MIN_HZ, FREQ_BINS_PER_OCTAVE),
+    valid_mask=frequency_range(F1_MIN_HZ, F1_MAX_HZ),
 )
 
 
@@ -157,11 +224,59 @@ VOICED = FrameTarget(
 )
 
 
+JITTER = FrameTarget(
+    name="jitter",
+    source="jitterLocal_sma3nz",
+    task=RegressionTask(),
+    transform=log1p,
+    valid_mask=positive,
+)
+
+SHIMMER = FrameTarget(
+    name="shimmer",
+    source="shimmerLocaldB_sma3nz",
+    task=RegressionTask(),
+    valid_mask=nonzero,
+)
+
+SPECTRAL_FLUX = FrameTarget(
+    name="spectral_flux",
+    source="spectralFlux_sma3",
+    task=RegressionTask(),
+    transform=log1p,
+)
+
+HNR = FrameTarget(
+    name="hnr",
+    source="HNRdBACF_sma3nz",
+    task=RegressionTask(),
+    valid_mask=nonzero,
+)
+
+ALPHA_RATIO = FrameTarget(
+    name="alpha_ratio",
+    source="alphaRatio_sma3",
+    task=RegressionTask(),
+)
+
+HAMMARBERG = FrameTarget(
+    name="hammarberg",
+    source="hammarbergIndex_sma3",
+    task=RegressionTask(),
+)
+
 TARGETS = {
     "logf0": LOG_F0,
     "smn_logf0": SPEAKER_NORMALIZED_LOG_F0,
     "voiced": VOICED,
     "loudness": LOUDNESS,
     "f1": F1,
+    "f1_bin": F1_BIN,
     "semitone": SEMITONE,
+    "jitter": JITTER,
+    "shimmer": SHIMMER,
+    "spectral_flux": SPECTRAL_FLUX,
+    "hnr": HNR,
+    "alpha_ratio": ALPHA_RATIO,
+    "hammarberg": HAMMARBERG,
 }
