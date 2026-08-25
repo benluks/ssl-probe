@@ -333,7 +333,7 @@ def main() -> None:
     if output is None:
         output = (
             args.feature_root
-            / f"{args.converted}_vs_{args.original}_{args.split}_pearson.csv"
+            / f"{args.converted}_vs_{args.original}_{args.split}_correlation.csv"
         )
 
     output.parent.mkdir(parents=True, exist_ok=True)
