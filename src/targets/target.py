@@ -25,6 +25,8 @@ class FrameTarget:
     task: ProbeTask
     transform: TensorTransform | None = None
     valid_mask: TensorMask | None = None
+    resources: tuple[str, ...] = ()
+    transform_kwargs: Callable | None = None
 
     def apply(
         self,
@@ -99,12 +101,30 @@ LOG_F0 = FrameTarget(
 )
 
 
+def speaker_log_f0_kwargs(sample, stores):
+    if "speaker_stats" not in stores:
+        raise ValueError("speaker_normalized_logf0 requires speaker statistics.")
+
+    spk_id = sample.resources["spk_id"].value
+
+    try:
+        speaker_mean = stores["speaker_stats"][spk_id]
+    except KeyError:
+        raise KeyError(f"No speaker statistics found for speaker {spk_id!r}.")
+
+    return {
+        "speaker_mean_log_f0": speaker_mean,
+    }
+
+
 SPEAKER_NORMALIZED_LOG_F0 = FrameTarget(
     name="speaker_normalized_logf0",
     source="F0semitoneFrom27.5Hz_sma3nz",
     task=RegressionTask(),
     transform=semitone_to_speaker_normalized_log_hz,
     valid_mask=valid_pitch_class,
+    resources=("spk_id",),
+    transform_kwargs=speaker_log_f0_kwargs,
 )
 
 
@@ -139,6 +159,7 @@ VOICED = FrameTarget(
 
 TARGETS = {
     "logf0": LOG_F0,
+    "smn_logf0": SPEAKER_NORMALIZED_LOG_F0,
     "voiced": VOICED,
     "loudness": LOUDNESS,
     "f1": F1,

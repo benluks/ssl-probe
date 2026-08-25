@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import json
 import math
 import random
 import warnings
 from os import PathLike
+from pathlib import Path
 
 import torch
 import torchaudio
 from quick_convert.components.feature_extractors.content import ContentFeatureExtractor
 from quick_convert.components.ssl import WavLMContentEncoder
 from quick_convert.data import AudioBatch, AudioSample, load_dataset
-from quick_convert.data.resources import ResourceCollection, ResourceRef
+from quick_convert.data.resources import (
+    ResourceCollection,
+    ResourceRef,
+    TemplateResourceProvider,
+)
 from torch.utils.data import DataLoader, IterableDataset, Sampler
 
 from .targets import FrameTarget, SmileParquetStore
@@ -65,6 +71,13 @@ class FrameBudgetBatchSampler(Sampler[list[int]]):
             yield batch
 
 
+RESOURCE_PROVIDERS = {
+    "spk_id": lambda spk_id_template: TemplateResourceProvider(
+        name="spk_id", template=spk_id_template, kind="text"
+    ),
+}
+
+
 class FrameDataset(IterableDataset):
     def __init__(
         self,
@@ -79,19 +92,41 @@ class FrameDataset(IterableDataset):
         frame_batch_size=512,
         shuffle=True,
         audio_root=None,
+        speaker_stats: PathLike | None = None,
+        spk_id_template: str = "{path.parent.parent.stem}",
     ):
         super().__init__()
 
         self.target = target
+        if self.target.transform_kwargs is not None and speaker_stats is None:
+            raise ValueError(
+                f"Target {self.target.name!r} requires speaker statistics."
+            )
+
         self.context_size = context_size
         self.context_radius = context_size // 2
+
+        additional_resource_providers = [
+            RESOURCE_PROVIDERS[name](spk_id_template) for name in self.target.resources
+        ]
 
         self.base_dataset = load_dataset(
             dataset_name,
             root=root,
             splits=list(splits),
             load=["audio"],
+            additional_resource_providers=additional_resource_providers,
         )
+
+        self.stores = {}
+
+        if speaker_stats is not None:
+            stats = json.loads(Path(speaker_stats).read_text())
+
+            self.stores["speaker_stats"] = {
+                spk_id: values["mean_log_f0"]
+                for spk_id, values in stats["speakers"].items()
+            }
 
         self.content_encoder = ContentFeatureExtractor(WavLMContentEncoder(layer=layer))
 
@@ -106,19 +141,18 @@ class FrameDataset(IterableDataset):
         self.shuffle = shuffle
 
         self.frame_lengths = [
-            self._estimate_wavlm_frames(sample.path)
-            for sample in self.base_dataset.rows
+            self._estimate_ssl_frames(sample.path) for sample in self.base_dataset.rows
         ]
 
     @staticmethod
-    def _estimate_wavlm_frames(path) -> int:
+    def _estimate_ssl_frames(path, model_sr=16_000, frame_reduction=320) -> int:
         info = torchaudio.info(path)
 
         # Convert source duration to equivalent 16 kHz sample count.
-        n_16k = round(info.num_frames * 16_000 / info.sample_rate)
+        n_16k = round(info.num_frames * model_sr / info.sample_rate)
 
         # WavLM frontend stride = 320 samples = 20 ms.
-        return math.ceil(n_16k / 320)
+        return math.ceil(n_16k / frame_reduction)
 
     @torch.inference_mode()
     def extract_frames(
@@ -151,7 +185,16 @@ class FrameDataset(IterableDataset):
             utterance_content = utterance_content[:n]
             raw_target = raw_target[:n]
 
-            target_values, valid = self.target.apply(raw_target)
+            kwargs = (
+                self.target.transform_kwargs(sample, self.stores)
+                if self.target.transform_kwargs is not None
+                else {}
+            )
+
+            target_values, valid = self.target.apply(
+                raw_target,
+                **kwargs,
+            )
 
             radius = self.context_radius
 
@@ -202,15 +245,13 @@ class FrameDataset(IterableDataset):
         utterance_loader = DataLoader(
             self.base_dataset,
             batch_sampler=batch_sampler,
-            collate_fn=self.base_dataset.collate_fn,
+            collate_fn=lambda samples: samples,
             num_workers=0,
         )
 
         residual: list[AudioSample] = []
 
-        for utterance_batch in utterance_loader:
-            samples = list(utterance_batch)
-
+        for samples in utterance_loader:
             frames = self.extract_frames(samples)
 
             pool = residual + frames

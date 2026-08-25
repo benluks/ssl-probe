@@ -60,6 +60,15 @@ def parse_args():
     parser.add_argument("--out-dir", default=None)
     parser.add_argument("--seed", type=int, default=115)
     parser.add_argument("--conversion", default="knnvc_original")
+    parser.add_argument(
+        "--speaker-stats",
+        type=Path,
+        default=None,
+    )
+    parser.add_argument(
+        "--spk-id-template",
+        default="{path.parent.parent.stem}",
+    )
 
     return parser.parse_args()
 
@@ -75,8 +84,11 @@ def main():
 
     train_dataset = FrameDataset(
         root=args.root,
+        dataset_name=args.dataset,
         splits=[args.train_split],
         smile_root=args.smile_root / args.train_split,
+        speaker_stats=args.speaker_stats,
+        spk_id_template=args.spk_id_template,
         layer=args.layer,
         target=target,
         context_size=args.context_size,
@@ -89,8 +101,11 @@ def main():
         if args.val_split is None
         else FrameDataset(
             root=args.root,
+            dataset_name=args.dataset,
             splits=[args.val_split],
             smile_root=args.smile_root / args.val_split,
+            speaker_stats=args.speaker_stats,
+            spk_id_template=args.spk_id_template,
             layer=args.layer,
             target=target,
             context_size=args.context_size,
