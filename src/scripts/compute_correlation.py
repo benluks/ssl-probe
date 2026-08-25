@@ -10,14 +10,12 @@ from tqdm import tqdm
 
 
 @dataclass
-class PearsonAccumulator:
+class CorrelationAccumulator:
     feature_names: list[str]
 
     def __post_init__(self):
         n_features = len(self.feature_names)
 
-        # float64 is intentional here. We're accumulating potentially
-        # tens of millions of observations.
         self.n = np.zeros(n_features, dtype=np.int64)
         self.sum_x = np.zeros(n_features, dtype=np.float64)
         self.sum_y = np.zeros(n_features, dtype=np.float64)
@@ -31,18 +29,6 @@ class PearsonAccumulator:
         y: np.ndarray,
         valid: np.ndarray | None = None,
     ) -> None:
-        """
-        Update statistics.
-
-        Args:
-            x:
-                Original features, shape [T, F].
-            y:
-                Converted features, shape [T, F].
-            valid:
-                Optional validity mask, shape [T, F].
-                If omitted, finite paired values are used.
-        """
         if x.shape != y.shape:
             raise ValueError(f"Shape mismatch: {x.shape=} vs {y.shape=}")
 
@@ -53,7 +39,6 @@ class PearsonAccumulator:
         else:
             valid = valid & finite
 
-        # Avoid NaN contamination while retaining separate masks per feature.
         x_valid = np.where(valid, x, 0.0)
         y_valid = np.where(valid, y, 0.0)
 
@@ -67,26 +52,57 @@ class PearsonAccumulator:
     def compute(self) -> pd.DataFrame:
         n = self.n.astype(np.float64)
 
-        numerator = n * self.sum_xy - self.sum_x * self.sum_y
+        pearson = np.full(len(n), np.nan, dtype=np.float64)
+        ccc = np.full(len(n), np.nan, dtype=np.float64)
 
-        x_term = n * self.sum_x2 - self.sum_x**2
-        y_term = n * self.sum_y2 - self.sum_y**2
+        usable = self.n >= 2
 
-        # Tiny negative values can arise from floating-point error.
-        x_term = np.maximum(x_term, 0.0)
-        y_term = np.maximum(y_term, 0.0)
+        # Means
+        mean_x = np.full_like(n, np.nan)
+        mean_y = np.full_like(n, np.nan)
 
-        denominator = np.sqrt(x_term * y_term)
+        mean_x[usable] = self.sum_x[usable] / n[usable]
+        mean_y[usable] = self.sum_y[usable] / n[usable]
 
-        correlation = np.full_like(numerator, np.nan, dtype=np.float64)
+        # Population variances and covariance
+        var_x = np.full_like(n, np.nan)
+        var_y = np.full_like(n, np.nan)
+        cov_xy = np.full_like(n, np.nan)
 
-        usable = (self.n >= 2) & (denominator > 0)
-        correlation[usable] = numerator[usable] / denominator[usable]
+        var_x[usable] = self.sum_x2[usable] / n[usable] - mean_x[usable] ** 2
+        var_y[usable] = self.sum_y2[usable] / n[usable] - mean_y[usable] ** 2
+        cov_xy[usable] = (
+            self.sum_xy[usable] / n[usable] - mean_x[usable] * mean_y[usable]
+        )
+
+        # Guard against tiny negative values from floating-point error.
+        var_x = np.maximum(var_x, 0.0)
+        var_y = np.maximum(var_y, 0.0)
+
+        # Pearson
+        pearson_denominator = np.sqrt(var_x * var_y)
+        pearson_usable = usable & (pearson_denominator > 0)
+
+        pearson[pearson_usable] = (
+            cov_xy[pearson_usable] / pearson_denominator[pearson_usable]
+        )
+
+        # Concordance correlation coefficient
+        ccc_denominator = var_x + var_y + (mean_x - mean_y) ** 2
+
+        ccc_usable = usable & (ccc_denominator > 0)
+
+        ccc[ccc_usable] = 2.0 * cov_xy[ccc_usable] / ccc_denominator[ccc_usable]
 
         return pd.DataFrame(
             {
                 "feature": self.feature_names,
-                "pearson_r": correlation,
+                "pearson_r": pearson,
+                "ccc": ccc,
+                "mean_original": mean_x,
+                "mean_converted": mean_y,
+                "std_original": np.sqrt(var_x),
+                "std_converted": np.sqrt(var_y),
                 "n": self.n,
             }
         )
@@ -205,7 +221,7 @@ def compute_split_correlations(
 
     print(f"Matched utterances: {len(common_utt_ids)}")
 
-    accumulator: PearsonAccumulator | None = None
+    accumulator: CorrelationAccumulator | None = None
     feature_names: list[str] | None = None
 
     total_frames = 0
@@ -221,7 +237,7 @@ def compute_split_correlations(
 
         if feature_names is None:
             feature_names = current_features
-            accumulator = PearsonAccumulator(feature_names)
+            accumulator = CorrelationAccumulator(feature_names)
 
             print(f"Features: {len(feature_names)}")
 
@@ -304,11 +320,14 @@ def main() -> None:
     print(results.to_string(index=False))
 
     valid_r = results["pearson_r"].dropna()
+    valid_ccc = results["ccc"].dropna()
 
     print()
-    print(f"Mean feature Pearson r:   {valid_r.mean():.4f}")
-    print(f"Median feature Pearson r: {valid_r.median():.4f}")
-    print(f"Features included:        {len(valid_r)}/{len(results)}")
+    print(f"Mean feature Pearson r:    {valid_r.mean():.4f}")
+    print(f"Median feature Pearson r:  {valid_r.median():.4f}")
+    print(f"Mean feature CCC:          {valid_ccc.mean():.4f}")
+    print(f"Median feature CCC:        {valid_ccc.median():.4f}")
+    print(f"Features included:         {len(valid_ccc)}/{len(results)}")
 
     output = args.output
     if output is None:
