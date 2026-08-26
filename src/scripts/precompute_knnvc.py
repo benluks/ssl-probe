@@ -25,8 +25,9 @@ def parse_args():
         "--dataset",
         default="librispeech",
     )
-
-    parser.add_argument("--hifigan-ckpt", default="original")
+    parser.add_argument(
+        "--hifigan-ckpt", choices=["original", "prematched"], default="original"
+    )
 
     return parser.parse_args()
 
