@@ -92,7 +92,7 @@ def nonzero(x: torch.Tensor) -> torch.Tensor:
 
 
 def to_voiced(x: torch.Tensor) -> torch.Tensor:
-    return (x > 0).long()
+    return (x > 0)
 
 
 def to_semitone_class(x: torch.Tensor) -> torch.Tensor:
