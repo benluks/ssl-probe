@@ -41,7 +41,7 @@ if __name__ == "__main__":
     out_dir = Path(args.out_root) / out_folder / args.dataset
 
     dataset = load_dataset(args.dataset, root=args.root, splits=args.splits)
-    smile = init_opensmile()
+    # smile = init_opensmile()
 
     for sample in tqdm(dataset):
         with torch.inference_mode():
