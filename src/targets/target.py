@@ -55,11 +55,17 @@ class FrameTarget:
             mask &= self.valid_mask(values)
 
         if self.transform is not None:
-            transformed = values.clone()
-            transformed[mask] = self.transform(
+            transformed_valid = self.transform(
                 values[mask],
                 **transform_kwargs,
             )
+
+            transformed = torch.zeros(
+                values.shape,
+                dtype=transformed_valid.dtype,
+                device=values.device,
+            )
+            transformed[mask] = transformed_valid
             values = transformed
 
         return values, mask

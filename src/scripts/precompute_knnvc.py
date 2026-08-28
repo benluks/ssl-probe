@@ -8,8 +8,6 @@ from quick_convert.components.ssl import WavLMContentEncoder
 from quick_convert.data import load_dataset
 from tqdm import tqdm
 
-from ..opensmile_factory import init_opensmile
-
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -41,7 +39,6 @@ if __name__ == "__main__":
     out_dir = Path(args.out_root) / out_folder / args.dataset
 
     dataset = load_dataset(args.dataset, root=args.root, splits=args.splits)
-    # smile = init_opensmile()
 
     for sample in tqdm(dataset):
         with torch.inference_mode():

@@ -288,7 +288,7 @@ def main() -> None:
     parser.add_argument(
         "--feature-root",
         type=Path,
-        default=Path("features/opensmile"),
+        default=Path("features/statistics"),
     )
     parser.add_argument(
         "--original",
@@ -333,7 +333,7 @@ def main() -> None:
     if output is None:
         output = (
             args.feature_root
-            / f"{args.converted}_vs_{args.original}_{args.split}_correlation.csv"
+            / f"{args.converted}_vs_{args.original} / {args.split}.csv"
         )
 
     output.parent.mkdir(parents=True, exist_ok=True)
