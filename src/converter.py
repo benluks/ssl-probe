@@ -8,7 +8,7 @@ from tqdm import tqdm
 from .opensmile_factory import init_opensmile
 
 if __name__ == "__main__":
-    wavlm = WavLMContentEncoder(layer=5)
+    wavlm = WavLMContentEncoder(layer=6)
     hifigan = KnnVCHifiGanDecoder.from_pretrained("original")
 
     dataset = load_dataset(

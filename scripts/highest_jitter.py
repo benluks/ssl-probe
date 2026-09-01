@@ -1,12 +1,15 @@
 from pathlib import Path
 
 import pandas as pd
+from tqdm import tqdm
 
 root = Path("features/opensmile/librispeech")
 
 rows = []
 
-for path in root.rglob("*/*.parquet"):
+smile_files = sorted(root.rglob("*/*.parquet"))
+
+for path in tqdm(smile_files):
     df = pd.read_parquet(path)
 
     jitter = df["jitterLocal_sma3nz"]
