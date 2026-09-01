@@ -24,6 +24,10 @@ def parse_args():
         default="librispeech",
     )
     parser.add_argument(
+        "--pattern",
+        default="*",
+    )
+    parser.add_argument(
         "--hifigan-ckpt", choices=["original", "prematched"], default="original"
     )
 
