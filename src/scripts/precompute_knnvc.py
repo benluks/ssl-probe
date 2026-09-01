@@ -42,7 +42,9 @@ if __name__ == "__main__":
     out_folder = args.out_folder or f"knnvc_{args.hifigan_ckpt}"
     out_dir = Path(args.out_root) / out_folder / args.dataset
 
-    dataset = load_dataset(args.dataset, root=args.root, splits=args.splits)
+    dataset = load_dataset(
+        args.dataset, root=args.root, splits=args.splits, pattern=args.pattern
+    )
 
     for sample in tqdm(dataset):
         with torch.inference_mode():
