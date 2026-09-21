@@ -116,7 +116,7 @@ def main():
     )
 
     module = Probe(
-        input_dim=train_dataset.content_encoder.encoder.feature_dim
+        input_dim=train_dataset.content_encoder.feature_dim
         * train_dataset.context_size,
         target=target,
         hidden_dim=args.hidden_dim,
