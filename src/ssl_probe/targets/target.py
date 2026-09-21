@@ -148,7 +148,7 @@ def speaker_log_f0_kwargs(sample, stores):
     try:
         speaker_mean = stores["speaker_stats"][spk_id]
     except KeyError:
-        raise KeyError(f"No speaker statistics found for speaker {spk_id!r}.")
+        raise KeyError(f"No speaker statistics found for speaker {spk_id!r}.") from None
 
     return {
         "speaker_mean_log_f0": speaker_mean,

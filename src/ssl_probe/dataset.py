@@ -97,9 +97,7 @@ class FrameDataset(IterableDataset):
 
         self.target = target
         if self.target.transform_kwargs is not None and speaker_stats is None:
-            raise ValueError(
-                f"Target {self.target.name!r} requires speaker statistics."
-            )
+            raise ValueError(f"Target {self.target.name!r} requires speaker statistics.")
 
         self.context_size = context_size
         self.context_radius = context_size // 2
@@ -122,8 +120,7 @@ class FrameDataset(IterableDataset):
             stats = json.loads(Path(speaker_stats).read_text())
 
             self.stores["speaker_stats"] = {
-                spk_id: values["mean_log_f0"]
-                for spk_id, values in stats["speakers"].items()
+                spk_id: values["mean_log_f0"] for spk_id, values in stats["speakers"].items()
             }
 
         self.content_encoder = WavLMContentEncoder(layer=layer)
@@ -146,9 +143,7 @@ class FrameDataset(IterableDataset):
         info = torchaudio.info(path)
 
         # Convert source duration to the encoder's required sample rate.
-        input_length = round(
-            info.num_frames * self.content_encoder.sample_rate / info.sample_rate
-        )
+        input_length = round(info.num_frames * self.content_encoder.sample_rate / info.sample_rate)
         lengths = torch.tensor([input_length], dtype=torch.long)
 
         return int(self.content_encoder.output_lengths(lengths)[0])

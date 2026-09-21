@@ -27,9 +27,7 @@ def parse_args():
         "--pattern",
         default="*",
     )
-    parser.add_argument(
-        "--hifigan-ckpt", choices=["original", "prematched"], default="original"
-    )
+    parser.add_argument("--hifigan-ckpt", choices=["original", "prematched"], default="original")
 
     return parser.parse_args()
 
@@ -42,9 +40,7 @@ if __name__ == "__main__":
     out_folder = args.out_folder or f"knnvc_{args.hifigan_ckpt}"
     out_dir = Path(args.out_root) / out_folder / args.dataset
 
-    dataset = load_dataset(
-        args.dataset, root=args.root, splits=args.splits, pattern=args.pattern
-    )
+    dataset = load_dataset(args.dataset, root=args.root, splits=args.splits, pattern=args.pattern)
 
     for sample in tqdm(dataset):
         with torch.inference_mode():

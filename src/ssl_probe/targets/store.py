@@ -15,7 +15,6 @@ class SmileParquetStore:
         audio_root: PathLike | None = None,
         feature_column: str | None = None,
     ):
-
         self.smile_root = Path(smile_root)
         self.feature_column = feature_column
         self.audio_root = Path(audio_root) if audio_root is not None else None

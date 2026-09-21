@@ -10,8 +10,9 @@ from quick_convert.training.lightning.optim import LinearWarmup, Optimization
 from quick_convert.training.lightning.trainer import LightningTrainer
 
 from ..dataset import FrameDataset
-from ..probe import Probe\nfrom ..training import ProbeTrainingModule
+from ..probe import Probe
 from ..targets import TARGETS
+from ..training import ProbeTrainingModule
 
 
 def parse_args():
@@ -113,8 +114,7 @@ def main():
     )
 
     probe = Probe(
-        input_dim=train_dataset.content_encoder.feature_dim
-        * train_dataset.context_size,
+        input_dim=train_dataset.content_encoder.feature_dim * train_dataset.context_size,
         output_dim=target.task.output_dim,
         hidden_dim=args.hidden_dim,
         nonlinearity=args.nonlinearity,
@@ -163,9 +163,7 @@ def main():
                 ModelCheckpoint(monitor="val/loss", mode="min", save_last=False),
                 LearningRateMonitor(logging_interval="step"),
             ],
-            "logger": WandbLogger(
-                name=str(run_name), save_dir=out_dir, project="ssl-probe"
-            ),
+            "logger": WandbLogger(name=str(run_name), save_dir=out_dir, project="ssl-probe"),
         },
     )
 

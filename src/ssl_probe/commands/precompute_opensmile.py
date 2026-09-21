@@ -50,9 +50,7 @@ def main():
 
     out_folder = args.out_folder or args.dataset
     if out_folder is None:
-        raise ValueError(
-            "you must set a dataset name in --dataset or pass --out-folder"
-        )
+        raise ValueError("you must set a dataset name in --dataset or pass --out-folder")
 
     out_dir = Path(args.out_root) / out_folder
     for split in args.splits:
