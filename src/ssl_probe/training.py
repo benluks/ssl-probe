@@ -21,7 +21,12 @@ class ProbeOutput:
 class ProbeTrainingModule(BaseTrainingModule):
     """Lightning training adapter for a probe and its target task."""
 
-    def __init__(self, probe: Probe, optimization: Optimization, target: FrameTarget) -> None:
+    def __init__(
+        self,
+        probe: Probe,
+        optimization: Optimization,
+        target: FrameTarget,
+    ) -> None:
         super().__init__(optimization)
         self.probe = probe
         self.target = target
@@ -36,8 +41,22 @@ class ProbeTrainingModule(BaseTrainingModule):
         x = batch.resources["content"].values.flatten(1)
         target = batch.resources[self.target.name].values[:, 0]
         result = self.target.task.compute(self.probe(x), target)
-        self.log(f"{stage}/loss", result.loss, on_step=stage == "train", on_epoch=True, prog_bar=True, batch_size=len(batch))
+
+        self.log(
+            f"{stage}/loss",
+            result.loss,
+            on_step=stage == "train",
+            on_epoch=True,
+            prog_bar=True,
+            batch_size=len(batch),
+        )
+
         metrics = self.train_metrics if stage == "train" else self.val_metrics
         metrics.update(result.metric_input, result.metric_target)
         self.log_dict(metrics, on_step=False, on_epoch=True, prog_bar=True)
-        return ProbeOutput(loss=result.loss, prediction=result.prediction, batch_size=len(batch))
+
+        return ProbeOutput(
+            loss=result.loss,
+            prediction=result.prediction,
+            batch_size=len(batch),
+        )
