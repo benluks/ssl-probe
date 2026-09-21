@@ -4,12 +4,45 @@ from dataclasses import dataclass
 
 import torch
 from quick_convert.data import AudioBatch
-from quick_convert.pipelines.training import BaseTrainingModule, Optimization
+from quick_convert.training.lightning.modules.base import BaseTrainingModule
+from quick_convert.training.lightning.optim import Optimization
 from torch import nn
 
 from .targets import FrameTarget
 
 NONLINEARITIES = {"relu": nn.ReLU, "gelu": nn.GELU, "none": nn.Identity}
+
+
+class Probe(nn.Module):
+    """A lightweight probe that maps frame-level representations to predictions."""
+
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        hidden_dim: list[int] | None = None,
+        nonlinearity: str = "gelu",
+    ) -> None:
+        super().__init__()
+
+        hidden_dim = hidden_dim or []
+        if isinstance(hidden_dim, int):
+            hidden_dim = [hidden_dim]
+
+        layers = []
+        in_dim = input_dim
+
+        output_dims = [*hidden_dim, output_dim]
+        for i, dim in enumerate(output_dims):
+            layers.append(nn.Linear(in_dim, dim))
+            if i != len(output_dims) - 1:
+                layers.append(NONLINEARITIES[nonlinearity]())
+            in_dim = dim
+
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.network(x)
 
 
 @dataclass
@@ -19,37 +52,27 @@ class ProbeOutput:
     batch_size: int
 
 
-class Probe(BaseTrainingModule):
+class ProbeTrainingModule(BaseTrainingModule):
+    """Lightning training adapter for a probe and its target task."""
+
     def __init__(
         self,
-        input_dim: int,
+        probe: Probe,
         optimization: Optimization,
         target: FrameTarget,
-        hidden_dim: list[int] | None = None,
-        nonlinearity: str = "gelu",
     ) -> None:
         super().__init__(optimization)
 
-        hidden_dim = hidden_dim or []
-        if isinstance(hidden_dim, int):
-            hidden_dim = [hidden_dim]
-
-        layers = []
-        in_dim = input_dim
-
-        output_dims = [*hidden_dim, target.task.output_dim]
-        for i, dim in enumerate(output_dims):
-            layers.append(nn.Linear(in_dim, dim))
-            if i != len(output_dims) - 1:
-                layers.append(NONLINEARITIES[nonlinearity]())
-            in_dim = dim
-        self.probe = nn.Sequential(*layers)
+        self.probe = probe
         self.target = target
 
         self.train_metrics = target.task.make_metrics().clone(prefix="train/")
         self.val_metrics = target.task.make_metrics().clone(prefix="val/")
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["probe", "target"])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.probe(x)
 
     def _shared_step(
         self,
@@ -57,7 +80,7 @@ class Probe(BaseTrainingModule):
         stage: str,
     ) -> ProbeOutput:
         x = batch.resources["content"].values
-        # flatten for context sizes larger than 1
+        # Flatten for context sizes larger than 1.
         x = x.flatten(1)
         target = batch.resources[self.target.name].values[:, 0]
 
@@ -88,5 +111,7 @@ class Probe(BaseTrainingModule):
         )
 
         return ProbeOutput(
-            loss=result.loss, prediction=result.prediction, batch_size=len(batch)
+            loss=result.loss,
+            prediction=result.prediction,
+            batch_size=len(batch),
         )
