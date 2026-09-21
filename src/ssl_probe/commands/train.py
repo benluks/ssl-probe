@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument(
         "--target",
         choices=TARGETS,
-        default="pitch",
+        default="logf0",
     )
 
     parser.add_argument("--frame-batch-size", type=int, default=8192)
