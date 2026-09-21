@@ -1,1 +1,1 @@
-"""Tools for probing speech representations for frame-level attributes."""\n
+"""Tools for probing speech representations for frame-level attributes."""
