@@ -12,7 +12,10 @@ The project uses Python 3.11+ and uv:
 uv sync --group dev
 ```
 
-Quick Convert is resolved from its GitHub repository by default. For local development against a Quick Convert checkout, install that checkout editable in the environment after syncing.
+Quick Convert is resolved from its GitHub repository by default. This source is part of the
+package metadata, so installing the built wheel resolves the same dependency. For local
+development against a Quick Convert checkout, install that checkout editable in the environment
+after syncing.
 
 ## CLI
 

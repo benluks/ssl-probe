@@ -9,7 +9,8 @@ from pathlib import Path
 import torch
 import torchaudio
 from quick_convert.components.ssl import WavLMContentEncoder
-from quick_convert.data import AudioBatch, AudioSample, load_dataset
+from quick_convert.data import AudioBatch, AudioSample
+from quick_convert.data.loading import load_dataset
 from quick_convert.data.resources import (
     ResourceCollection,
     ResourceRef,

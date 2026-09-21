@@ -36,3 +36,7 @@ def main() -> None:
 
     sys.argv = ["ssl-probe " + " ".join(key), *args[consumed:]]
     runpy.run_module(module, run_name="__main__")
+
+
+if __name__ == "__main__":
+    main()

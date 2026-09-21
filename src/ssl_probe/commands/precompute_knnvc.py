@@ -3,9 +3,8 @@ from pathlib import Path
 
 import torch
 import torchaudio
-from quick_convert.components.decoders import KnnVCHifiGanDecoder
 from quick_convert.components.ssl import WavLMContentEncoder
-from quick_convert.data import load_dataset
+from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
 
@@ -34,6 +33,15 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+
+    try:
+        from quick_convert.components.decoders import KnnVCHifiGanDecoder
+    except ImportError as error:
+        raise SystemExit(
+            "The installed Quick Convert version does not provide KnnVCHifiGanDecoder. "
+            "KNN-VC precomputation requires the legacy decoder integration."
+        ) from error
+
     wavlm = WavLMContentEncoder(layer=6)
     hifigan = KnnVCHifiGanDecoder.from_pretrained(args.hifigan_ckpt)
 

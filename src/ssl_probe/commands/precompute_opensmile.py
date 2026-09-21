@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import opensmile
-from quick_convert.data import load_dataset
+from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
 from ..opensmile import init_opensmile

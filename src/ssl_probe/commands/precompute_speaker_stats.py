@@ -5,7 +5,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from quick_convert.data import load_dataset
+from quick_convert.data.loading import load_dataset
 from quick_convert.data.resources import TemplateResourceProvider
 from tqdm import tqdm
 

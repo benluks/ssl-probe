@@ -10,14 +10,21 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "lightning>=2.6.5",
+    "numpy>=1.26",
     "opensmile>=2.6.0",
     "pandas>=2.0",
     "pyarrow>=15.0",
-    "quick-convert[training,transformers]",
+    "quick-convert[training,transformers] @ git+https://github.com/benluks/quick-convert.git",
     "scipy>=1.17.1",
+    "torch==2.6",
+    "torchaudio==2.6",
     "torchmetrics>=1.9.0",
+    "tqdm",
     "wandb>=0.28.1",
 ]
+
+[project.urls]
+Repository = "https://github.com/benluks/ssl-probe"
 
 [project.scripts]
 ssl-probe = "ssl_probe.cli:main"
@@ -25,9 +32,6 @@ ssl-probe = "ssl_probe.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["ssl_probe*"]
-
-[tool.uv.sources]
-quick-convert = { git = "https://github.com/benluks/quick-convert.git" }
 
 [dependency-groups]
 dev = [
