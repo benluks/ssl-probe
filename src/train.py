@@ -5,15 +5,12 @@ import lightning as L
 import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
-from quick_convert.pipelines.training import (
-    LightningTrainer,
-    Optimization,
-    TrainingPipeline,
-)
-from quick_convert.pipelines.training.optim.base import LinearWarmup
+from quick_convert.pipelines.training.pipeline import TrainingPipeline
+from quick_convert.training.lightning.optim import LinearWarmup, Optimization
+from quick_convert.training.lightning.trainer import LightningTrainer
 
 from .dataset import FrameDataset
-from .module import Probe
+from .module import Probe, ProbeTrainingModule
 from .targets import TARGETS
 
 
@@ -115,12 +112,17 @@ def main():
         )
     )
 
-    module = Probe(
+    probe = Probe(
         input_dim=train_dataset.content_encoder.feature_dim
         * train_dataset.context_size,
-        target=target,
+        output_dim=target.task.output_dim,
         hidden_dim=args.hidden_dim,
         nonlinearity=args.nonlinearity,
+    )
+
+    module = ProbeTrainingModule(
+        probe=probe,
+        target=target,
         optimization=Optimization(
             optimizer=torch.optim.AdamW,
             optimizer_kwargs={
