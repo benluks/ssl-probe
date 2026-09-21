@@ -8,7 +8,7 @@ from pathlib import Path
 
 import torch
 import torchaudio
-from quick_convert.components.ssl import WavLMContentEncoder
+from quick_convert.components.ssl import ContentEncoder
 from quick_convert.data import AudioBatch, AudioSample
 from quick_convert.data.loading import load_dataset
 from quick_convert.data.resources import (
@@ -80,12 +80,12 @@ RESOURCE_PROVIDERS = {
 class FrameDataset(IterableDataset):
     def __init__(
         self,
+        content_encoder: ContentEncoder,
         target: FrameTarget,
         smile_root: PathLike,
         root="/Users/ben/librispeech/LibriSpeech",
         dataset_name: str | None = "librispeech",
         splits=("test-other",),
-        layer=5,
         context_size=1,
         inference_frame_budget=10_000,
         frame_batch_size=512,
@@ -96,6 +96,7 @@ class FrameDataset(IterableDataset):
     ):
         super().__init__()
 
+        self.content_encoder = content_encoder.eval()
         self.target = target
         if self.target.transform_kwargs is not None and speaker_stats is None:
             raise ValueError(f"Target {self.target.name!r} requires speaker statistics.")
@@ -112,6 +113,7 @@ class FrameDataset(IterableDataset):
             root=root,
             splits=list(splits),
             load=["audio"],
+            target_sr=self._encoder_sample_rate(),
             additional_resource_providers=additional_resource_providers,
         )
 
@@ -124,8 +126,6 @@ class FrameDataset(IterableDataset):
                 spk_id: values["mean_log_f0"] for spk_id, values in stats["speakers"].items()
             }
 
-        self.content_encoder = WavLMContentEncoder(layer=layer)
-
         self.smile_features = SmileParquetStore(
             smile_root=smile_root,
             feature_column=self.target.source,
@@ -137,17 +137,56 @@ class FrameDataset(IterableDataset):
         self.shuffle = shuffle
 
         self.frame_lengths = [
-            self._estimate_ssl_frames(sample.path) for sample in self.base_dataset.rows
+            self._estimate_reference_frames(sample.path) for sample in self.base_dataset.rows
         ]
 
-    def _estimate_ssl_frames(self, path) -> int:
+    @property
+    def feature_dim(self) -> int:
+        return self.content_encoder.feature_dim
+
+    def _encoder_sample_rate(self) -> int:
+        sample_rate = getattr(self.content_encoder, "sample_rate", None)
+        if not isinstance(sample_rate, int) or sample_rate <= 0:
+            raise TypeError(
+                f"{type(self.content_encoder).__name__} must expose a positive integer "
+                "`sample_rate` for batched audio loading."
+            )
+        return sample_rate
+
+    def _estimate_reference_frames(self, path) -> int:
+        """Estimate duration in nominal 50 Hz frames for batch budgeting."""
         info = torchaudio.info(path)
+        return max(1, round(info.num_frames * 50 / info.sample_rate))
 
-        # Convert source duration to the encoder's required sample rate.
-        input_length = round(info.num_frames * self.content_encoder.sample_rate / info.sample_rate)
-        lengths = torch.tensor([input_length], dtype=torch.long)
+    @staticmethod
+    def _align_target_frames(raw_target: torch.Tensor, output_frames: int) -> torch.Tensor:
+        """Nearest-neighbor align a uniform target sequence to encoder frames."""
+        if output_frames < 0:
+            raise ValueError("output_frames cannot be negative.")
+        if output_frames == 0:
+            return raw_target[:0]
+        if raw_target.shape[0] == 0:
+            raise ValueError("Cannot align an empty target sequence to non-empty encoder output.")
 
-        return int(self.content_encoder.output_lengths(lengths)[0])
+        indices = torch.div(
+            torch.arange(output_frames) * raw_target.shape[0],
+            output_frames,
+            rounding_mode="floor",
+        ).clamp_max(raw_target.shape[0] - 1)
+        return raw_target[indices]
+
+    @staticmethod
+    def _normalize_content_frames(values: torch.Tensor) -> torch.Tensor:
+        """Normalize one utterance to ``(frames, features)`` for probing."""
+        while values.ndim > 2 and values.shape[1] == 1:
+            values = values.squeeze(1)
+        if values.ndim != 2:
+            raise ValueError(
+                "Content encoders must return one feature vector per frame for probing. "
+                f"Got an utterance tensor with shape {tuple(values.shape)}; select a single layer "
+                "or provide an adapter that flattens the per-frame representation."
+            )
+        return values
 
     @torch.inference_mode()
     def extract_frames(
@@ -163,11 +202,15 @@ class FrameDataset(IterableDataset):
         for batch_idx, sample in enumerate(samples):
             n_content = int(content.lengths[batch_idx])
             utterance_content = content.values[batch_idx, :n_content]
+            utterance_content = self._normalize_content_frames(utterance_content)
+            if utterance_content.shape[-1] != self.feature_dim:
+                raise ValueError(
+                    f"Encoder declares feature_dim={self.feature_dim}, but returned "
+                    f"{utterance_content.shape[-1]} features per frame."
+                )
 
             raw_target = self.smile_features[sample.utt_id]
-
-            # openSMILE = 10 ms hop, WavLM = 20 ms hop.
-            raw_target = raw_target[::2]
+            raw_target = self._align_target_frames(raw_target, n_content)
 
             n = min(
                 utterance_content.shape[0],
@@ -271,16 +314,3 @@ class FrameDataset(IterableDataset):
             batch_size=None,
             num_workers=0,
         )
-
-
-if __name__ == "__main__":
-    fd = FrameDataset(
-        utterance_batch_size=8,
-        frame_batch_size=512,
-    )
-
-    dl = fd.make_dataloader()
-
-    batch = next(iter(dl))
-
-    print(len(batch))

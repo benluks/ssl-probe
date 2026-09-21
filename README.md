@@ -37,11 +37,27 @@ ssl-probe train \\
   --root /path/to/LibriSpeech \\
   --train-split train-clean-100 \\
   --val-split dev-clean \\
+  --encoder wavlm \\
+  --encoder-kwargs '{"layer": 6}' \\
   --target logf0 \\
   --smile-root features/opensmile/librispeech
 ```
 
 The probe itself is a plain PyTorch module. Quick Convert's Lightning training adapter and pipeline infrastructure are used only for training orchestration.
+
+The representation encoder is not tied to WavLM. Built-in aliases are `wavlm`, `w2vbert`, and
+`dac`; any Quick Convert `ContentEncoder` subclass can also be selected by dotted class path:
+
+```bash
+ssl-probe train \\
+  --root /path/to/LibriSpeech \\
+  --encoder quick_convert.components.ssl.W2VBertContentEncoder \\
+  --encoder-kwargs '{"layer": 12}' \\
+  --target logf0
+```
+
+The encoder must expose its required `sample_rate` and return one vector per frame. Encoders with
+multiple layer vectors per frame should be configured to select a layer or wrapped in an adapter.
 
 ### Precompute openSMILE features
 
