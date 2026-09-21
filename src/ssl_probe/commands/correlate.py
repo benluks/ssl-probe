@@ -333,7 +333,7 @@ def main() -> None:
     if output is None:
         output = (
             args.feature_root
-            / f"{args.converted}_vs_{args.original} / {args.split}.csv"
+            / f"{args.converted}_vs_{args.original}" / f"{args.split}.csv"
         )
 
     output.parent.mkdir(parents=True, exist_ok=True)
