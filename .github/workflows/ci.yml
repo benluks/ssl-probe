@@ -22,9 +22,9 @@ jobs:
       - name: Install development environment
         run: uv sync --group dev
       - name: Check formatting
-        run: uv run --no-sync ruff format --check .
+        run: uv run --no-sync ruff format --check src/ssl_probe tests
       - name: Lint
-        run: uv run --no-sync ruff check --select B,E4,E7,E9,F,I,UP .
+        run: uv run --no-sync ruff check --select B,E4,E7,E9,F,I,UP src/ssl_probe tests
       - name: Run fast tests
         run: uv run --no-sync pytest
       - name: Verify installed wheel
