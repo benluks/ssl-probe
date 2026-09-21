@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import random
 import warnings
 from os import PathLike
@@ -9,7 +8,6 @@ from pathlib import Path
 
 import torch
 import torchaudio
-from quick_convert.components.feature_extractors.content import ContentFeatureExtractor
 from quick_convert.components.ssl import WavLMContentEncoder
 from quick_convert.data import AudioBatch, AudioSample, load_dataset
 from quick_convert.data.resources import (
@@ -55,7 +53,7 @@ class FrameBudgetBatchSampler(Sampler[list[int]]):
             candidate_max = max(max_len, length)
             candidate_size = len(batch) + 1
 
-            # Approximate padded WavLM cost:
+            # Approximate padded encoder cost:
             # B * max(T_i)
             padded_frames = candidate_size * candidate_max
 
@@ -128,7 +126,7 @@ class FrameDataset(IterableDataset):
                 for spk_id, values in stats["speakers"].items()
             }
 
-        self.content_encoder = ContentFeatureExtractor(WavLMContentEncoder(layer=layer))
+        self.content_encoder = WavLMContentEncoder(layer=layer)
 
         self.smile_features = SmileParquetStore(
             smile_root=smile_root,
@@ -144,15 +142,16 @@ class FrameDataset(IterableDataset):
             self._estimate_ssl_frames(sample.path) for sample in self.base_dataset.rows
         ]
 
-    @staticmethod
-    def _estimate_ssl_frames(path, model_sr=16_000, frame_reduction=320) -> int:
+    def _estimate_ssl_frames(self, path) -> int:
         info = torchaudio.info(path)
 
-        # Convert source duration to equivalent 16 kHz sample count.
-        n_16k = round(info.num_frames * model_sr / info.sample_rate)
+        # Convert source duration to the encoder's required sample rate.
+        input_length = round(
+            info.num_frames * self.content_encoder.sample_rate / info.sample_rate
+        )
+        lengths = torch.tensor([input_length], dtype=torch.long)
 
-        # WavLM frontend stride = 320 samples = 20 ms.
-        return math.ceil(n_16k / frame_reduction)
+        return int(self.content_encoder.output_lengths(lengths)[0])
 
     @torch.inference_mode()
     def extract_frames(
@@ -161,16 +160,13 @@ class FrameDataset(IterableDataset):
     ) -> list[AudioSample]:
         audio_batch = self.base_dataset.collate_fn(samples)
 
-        content = self.content_encoder.extract_batch(audio_batch)
+        content = self.content_encoder(audio_batch)
 
         frame_samples = []
 
         for batch_idx, sample in enumerate(samples):
-            if hasattr(content, "values") and hasattr(content, "lengths"):
-                n_content = int(content.lengths[batch_idx])
-                utterance_content = content.values[batch_idx, :n_content]
-            else:
-                utterance_content = content[batch_idx]
+            n_content = int(content.lengths[batch_idx])
+            utterance_content = content.values[batch_idx, :n_content]
 
             raw_target = self.smile_features[sample.utt_id]
 
