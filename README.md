@@ -45,8 +45,9 @@ ssl-probe train \\
 
 The probe itself is a plain PyTorch module. Quick Convert's Lightning training adapter and pipeline infrastructure are used only for training orchestration.
 
-The representation encoder is not tied to WavLM. Built-in aliases are `wavlm`, `w2vbert`, and
-`dac`; any Quick Convert `ContentEncoder` subclass can also be selected by dotted class path:
+The representation encoder is not tied to WavLM. Quick Convert owns the built-in aliases
+`dac`, `emotion2vec`, `pros2vec`, `s3tokenizer`, `w2vbert`, and `wavlm`. Any Quick Convert
+`ContentEncoder` subclass can also be selected by dotted class path:
 
 ```bash
 ssl-probe train \\
