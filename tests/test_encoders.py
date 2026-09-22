@@ -1,7 +1,12 @@
 from pathlib import Path
 
 import torch
-from quick_convert.components.ssl import ContentEncoder, ContentFeatures, WavLMContentEncoder
+from quick_convert.components.ssl import (
+    ContentEncoder,
+    ContentFeatures,
+    S3TokenizerContentEncoder,
+    WavLMContentEncoder,
+)
 
 from ssl_probe.encoders import content_encoder_slug, resolve_content_encoder_class
 
@@ -28,6 +33,7 @@ class ExampleContentEncoder(ContentEncoder):
 
 def test_resolve_content_encoder_alias() -> None:
     assert resolve_content_encoder_class("wavlm") is WavLMContentEncoder
+    assert resolve_content_encoder_class("s3tokenizer") is S3TokenizerContentEncoder
 
 
 def test_content_encoder_slug() -> None:
