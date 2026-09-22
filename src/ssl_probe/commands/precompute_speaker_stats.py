@@ -9,6 +9,7 @@ from quick_convert.data.loading import load_dataset
 from quick_convert.data.resources import TemplateResourceProvider
 from tqdm import tqdm
 
+from ..paths import utterance_relative_path
 from ..targets.store import SmileParquetStore
 from ..targets.target import LOG_F0, semitone_to_log_hz, valid_pitch_class
 
@@ -74,19 +75,17 @@ def main():
 
     features_root = Path(args.features_root) / args.features_folder
 
-    stores = {
-        split: SmileParquetStore(
-            smile_root=features_root / split,
-            feature_column=LOG_F0.source,
-        )
-        for split in args.splits
-    }
+    store = SmileParquetStore(
+        smile_root=features_root,
+        feature_column=LOG_F0.source,
+    )
 
     sums = defaultdict(float)
     counts = defaultdict(int)
 
     for sample in tqdm(dataset, desc="+".join(args.splits)):
-        semitone = stores[sample.split][sample.utt_id]
+        relative_path = utterance_relative_path(sample.utt_id, sample.split)
+        semitone = store[str(relative_path)]
 
         valid = valid_pitch_class(semitone)
         semitone = semitone[valid]
