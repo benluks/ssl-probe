@@ -4,8 +4,8 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from quick_convert.components.ssl import ContentEncoder
 from quick_convert.components.ssl import (
-    ContentEncoder,
     resolve_content_encoder as resolve_content_encoder_class,
 )
 
