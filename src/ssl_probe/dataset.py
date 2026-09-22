@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import warnings
 from os import PathLike
@@ -97,6 +98,7 @@ class FrameDataset(IterableDataset):
         super().__init__()
 
         self.content_encoder = content_encoder.eval()
+        self.content_frame_hz = self._encoder_frame_hz()
         self.target = target
         if self.target.transform_kwargs is not None and speaker_stats is None:
             raise ValueError(f"Target {self.target.name!r} requires speaker statistics.")
@@ -153,26 +155,41 @@ class FrameDataset(IterableDataset):
             )
         return sample_rate
 
+    def _encoder_frame_hz(self) -> float:
+        frame_hz = self.content_encoder.frame_hz
+        if not isinstance(frame_hz, (int, float)) or frame_hz <= 0:
+            raise TypeError(
+                f"{type(self.content_encoder).__name__} must expose a positive `frame_hz` "
+                "for frame-level probing."
+            )
+        return float(frame_hz)
+
     def _estimate_reference_frames(self, path) -> int:
-        """Estimate duration in nominal 50 Hz frames for batch budgeting."""
+        """Estimate encoder frames from audio duration for batch budgeting."""
         info = torchaudio.info(path)
-        return max(1, round(info.num_frames * 50 / info.sample_rate))
+        return max(1, round(info.num_frames * self.content_frame_hz / info.sample_rate))
 
     @staticmethod
-    def _align_target_frames(raw_target: torch.Tensor, output_frames: int) -> torch.Tensor:
-        """Nearest-neighbor align a uniform target sequence to encoder frames."""
+    def _align_target_frames(
+        raw_target: torch.Tensor,
+        output_frames: int,
+        *,
+        target_frame_hz: float,
+        content_frame_hz: float,
+    ) -> torch.Tensor:
+        """Sample target frames at zero-origin content-frame times."""
         if output_frames < 0:
             raise ValueError("output_frames cannot be negative.")
+        if target_frame_hz <= 0 or content_frame_hz <= 0:
+            raise ValueError("Target and content frame rates must be positive.")
         if output_frames == 0:
             return raw_target[:0]
         if raw_target.shape[0] == 0:
             raise ValueError("Cannot align an empty target sequence to non-empty encoder output.")
 
-        indices = torch.div(
-            torch.arange(output_frames) * raw_target.shape[0],
-            output_frames,
-            rounding_mode="floor",
-        ).clamp_max(raw_target.shape[0] - 1)
+        content_times = torch.arange(output_frames, dtype=torch.float64) / content_frame_hz
+        indices = torch.floor(content_times * target_frame_hz).to(dtype=torch.long)
+        indices = indices[indices < raw_target.shape[0]]
         return raw_target[indices]
 
     @staticmethod
@@ -196,6 +213,15 @@ class FrameDataset(IterableDataset):
         audio_batch = self.base_dataset.collate_fn(samples)
 
         content = self.content_encoder(audio_batch)
+        if content.frame_hz is None:
+            raise ValueError(
+                f"{type(self.content_encoder).__name__} returned features without a frame timebase."
+            )
+        if not math.isclose(content.frame_hz, self.content_frame_hz):
+            raise ValueError(
+                f"{type(self.content_encoder).__name__} declares frame_hz={self.content_frame_hz}, "
+                f"but returned frame_hz={content.frame_hz}."
+            )
 
         frame_samples = []
 
@@ -210,7 +236,12 @@ class FrameDataset(IterableDataset):
                 )
 
             raw_target = self.smile_features[sample.utt_id]
-            raw_target = self._align_target_frames(raw_target, n_content)
+            raw_target = self._align_target_frames(
+                raw_target,
+                n_content,
+                target_frame_hz=self.smile_features.frame_hz,
+                content_frame_hz=content.frame_hz,
+            )
 
             n = min(
                 utterance_content.shape[0],
