@@ -40,6 +40,7 @@ def test_train_defaults_are_encoder_neutral() -> None:
     assert args.experiment_label is None
     assert args.layer_fusion == "none"
     assert args.num_layers is None
+    assert args.layer_log_interval == 1000
     assert not hasattr(args, "conversion")
 
 
