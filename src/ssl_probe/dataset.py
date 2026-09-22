@@ -94,11 +94,13 @@ class FrameDataset(IterableDataset):
         audio_root=None,
         speaker_stats: PathLike | None = None,
         spk_id_template: str = "{path.parent.parent.stem}",
+        preserve_layers: bool = False,
     ):
         super().__init__()
 
         self.content_encoder = content_encoder.eval()
         self.content_frame_hz = self._encoder_frame_hz()
+        self.preserve_layers = preserve_layers
         self.target = target
         if self.target.transform_kwargs is not None and speaker_stats is None:
             raise ValueError(f"Target {self.target.name!r} requires speaker statistics.")
@@ -193,15 +195,27 @@ class FrameDataset(IterableDataset):
         return raw_target[indices]
 
     @staticmethod
-    def _normalize_content_frames(values: torch.Tensor) -> torch.Tensor:
-        """Normalize one utterance to ``(frames, features)`` for probing."""
+    def _normalize_content_frames(
+        values: torch.Tensor,
+        *,
+        preserve_layers: bool = False,
+    ) -> torch.Tensor:
+        """Normalize one utterance for single-layer probing or layer fusion."""
+        if preserve_layers:
+            if values.ndim != 3:
+                raise ValueError(
+                    "Layer fusion requires content with shape (frames, layers, features), "
+                    f"but got {tuple(values.shape)}."
+                )
+            return values
+
         while values.ndim > 2 and values.shape[1] == 1:
             values = values.squeeze(1)
         if values.ndim != 2:
             raise ValueError(
                 "Content encoders must return one feature vector per frame for probing. "
                 f"Got an utterance tensor with shape {tuple(values.shape)}; select a single layer "
-                "or provide an adapter that flattens the per-frame representation."
+                "or enable layer fusion."
             )
         return values
 
@@ -228,7 +242,10 @@ class FrameDataset(IterableDataset):
         for batch_idx, sample in enumerate(samples):
             n_content = int(content.lengths[batch_idx])
             utterance_content = content.values[batch_idx, :n_content]
-            utterance_content = self._normalize_content_frames(utterance_content)
+            utterance_content = self._normalize_content_frames(
+                utterance_content,
+                preserve_layers=self.preserve_layers,
+            )
             if utterance_content.shape[-1] != self.feature_dim:
                 raise ValueError(
                     f"Encoder declares feature_dim={self.feature_dim}, but returned "
