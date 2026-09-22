@@ -94,6 +94,12 @@ arbitrary dotted-path encoder whose model metadata does not expose the count, pa
 `--num-layers`. Fusion stays inside the plain `Probe` module, so its softmax-normalized layer
 weights are learned with the probe rather than frozen during feature extraction.
 
+During training, the normalized weights are logged as per-layer scalar histories and as a bar
+chart through Quick Convert's media-logger abstraction. The default logging interval is 1,000
+optimizer steps and can be changed with `--layer-log-interval`. At the end of training,
+`layer_weights.json` is written to the prepared run directory with both the learned logits and
+normalized weights. The weights also remain part of the probe checkpoint.
+
 ### Precompute openSMILE features
 
 ```bash
