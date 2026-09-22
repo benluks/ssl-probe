@@ -35,6 +35,27 @@ def test_reject_multiple_vectors_per_frame() -> None:
         FrameDataset._normalize_content_frames(values)
 
 
+def test_preserve_multiple_layer_vectors_per_frame() -> None:
+    values = torch.zeros(5, 12, 3)
+
+    normalized = FrameDataset._normalize_content_frames(
+        values,
+        preserve_layers=True,
+    )
+
+    assert normalized.shape == (5, 12, 3)
+
+
+def test_layer_fusion_rejects_single_layer_content() -> None:
+    values = torch.zeros(5, 3)
+
+    with pytest.raises(ValueError, match="Layer fusion requires"):
+        FrameDataset._normalize_content_frames(
+            values,
+            preserve_layers=True,
+        )
+
+
 def test_alignment_uses_timebase_instead_of_sequence_proportion() -> None:
     target = torch.arange(10)
 

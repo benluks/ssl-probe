@@ -15,11 +15,14 @@ class Probe(nn.Module):
         output_dim: int,
         hidden_dim: list[int] | None = None,
         nonlinearity: str = "gelu",
+        feature_transform: nn.Module | None = None,
     ) -> None:
         super().__init__()
         hidden_dim = hidden_dim or []
         if isinstance(hidden_dim, int):
             hidden_dim = [hidden_dim]
+
+        self.feature_transform = feature_transform
 
         layers = []
         in_dim = input_dim
@@ -32,4 +35,8 @@ class Probe(nn.Module):
         self.network = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.feature_transform is not None:
+            x = self.feature_transform(x)
+        if x.ndim > 2:
+            x = x.flatten(1)
         return self.network(x)

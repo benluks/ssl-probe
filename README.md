@@ -71,12 +71,28 @@ ssl-probe train \
   --target logf0
 ```
 
-The encoder must expose its required `sample_rate` and `frame_hz`, and return one vector per
-frame. Probe targets are sampled at encoder-frame times using the encoder and openSMILE timebases;
-they are not stretched proportionally to the encoder sequence length. Existing openSMILE outputs
-without frame-rate metadata are treated as the standard 100 Hz low-level-descriptor stream.
-Encoders with multiple layer vectors per frame should be configured to select a layer or wrapped
-in an adapter.
+The encoder must expose its required `sample_rate` and `frame_hz`. Probe targets are sampled
+at encoder-frame times using the encoder and openSMILE timebases; they are not stretched
+proportionally to the encoder sequence length. Existing openSMILE outputs without frame-rate
+metadata are treated as the standard 100 Hz low-level-descriptor stream.
+
+For encoders that return multiple layer vectors per frame, either select a layer through the
+encoder's own constructor arguments or train Quick Convert's weighted-sum fusion jointly with the
+probe:
+
+```bash
+ssl-probe train \
+  --root /path/to/LibriSpeech \
+  --encoder s3tokenizer \
+  --encoder-kwargs '{"representation": "encoder", "layer": -1}' \
+  --layer-fusion weighted-sum \
+  --target logf0
+```
+
+The layer count is inferred for Quick Convert's WavLM, W2V-BERT, and S3Tokenizer encoders. For an
+arbitrary dotted-path encoder whose model metadata does not expose the count, pass
+`--num-layers`. Fusion stays inside the plain `Probe` module, so its softmax-normalized layer
+weights are learned with the probe rather than frozen during feature extraction.
 
 ### Precompute openSMILE features
 

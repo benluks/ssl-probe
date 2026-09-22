@@ -38,6 +38,8 @@ def test_train_defaults_are_encoder_neutral() -> None:
         "features/opensmile/librispeech"
     )
     assert args.experiment_label is None
+    assert args.layer_fusion == "none"
+    assert args.num_layers is None
     assert not hasattr(args, "conversion")
 
 
