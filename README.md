@@ -33,14 +33,28 @@ ssl-probe precompute speaker-stats --help
 ### Train a probe
 
 ```bash
-ssl-probe train \\
-  --root /path/to/LibriSpeech \\
-  --train-split train-clean-100 \\
-  --val-split dev-clean \\
-  --encoder wavlm \\
-  --encoder-kwargs '{"layer": 6}' \\
-  --target logf0 \\
+ssl-probe train \
+  --root /path/to/LibriSpeech \
+  --train-split train-clean-100 \
+  --val-split dev-clean \
+  --encoder wavlm \
+  --encoder-kwargs '{"layer": 6}' \
+  --target logf0 \
   --smile-root features/opensmile/librispeech
+```
+
+The openSMILE feature store defaults to `features/opensmile/<dataset>`. Pass
+`--smile-root` when the features live elsewhere. Run names describe the target, dataset,
+encoder, probe nonlinearity, and context size without assuming a conversion system. Use
+`--experiment-label` to distinguish an explicit data or experiment variant:
+
+```bash
+ssl-probe train \
+  --root /path/to/converted/LibriSpeech \
+  --smile-root features/opensmile/knnvc-original-librispeech \
+  --experiment-label knnvc-original \
+  --encoder w2vbert \
+  --target logf0
 ```
 
 The probe itself is a plain PyTorch module. Quick Convert's Lightning training adapter and pipeline infrastructure are used only for training orchestration.
@@ -50,10 +64,10 @@ The representation encoder is not tied to WavLM. Quick Convert owns the built-in
 `ContentEncoder` subclass can also be selected by dotted class path:
 
 ```bash
-ssl-probe train \\
-  --root /path/to/LibriSpeech \\
-  --encoder quick_convert.components.ssl.W2VBertContentEncoder \\
-  --encoder-kwargs '{"layer": 12}' \\
+ssl-probe train \
+  --root /path/to/LibriSpeech \
+  --encoder quick_convert.components.ssl.W2VBertContentEncoder \
+  --encoder-kwargs '{"layer": 12}' \
   --target logf0
 ```
 
@@ -67,9 +81,9 @@ in an adapter.
 ### Precompute openSMILE features
 
 ```bash
-ssl-probe precompute opensmile \\
-  --root /path/to/LibriSpeech \\
-  --dataset librispeech \\
+ssl-probe precompute opensmile \
+  --root /path/to/LibriSpeech \
+  --dataset librispeech \
   --splits train-clean-100 dev-clean
 ```
 

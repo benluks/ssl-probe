@@ -17,7 +17,7 @@ from ..targets import TARGETS
 from ..training import ProbeTrainingModule
 
 
-def parse_args():
+def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
 
     # Data / representation
@@ -64,13 +64,18 @@ def parse_args():
     parser.add_argument(
         "--smile-root",
         type=Path,
-        default="features/opensmile/knnvc_original_librispeech",
+        default=None,
+        help="Feature-store root. Defaults to features/opensmile/<dataset>.",
     )
 
     # Output
     parser.add_argument("--out-dir", default=None)
     parser.add_argument("--seed", type=int, default=115)
-    parser.add_argument("--conversion", default="knnvc_original")
+    parser.add_argument(
+        "--experiment-label",
+        default=None,
+        help="Optional data or experiment variant included in the run name.",
+    )
     parser.add_argument(
         "--speaker-stats",
         type=Path,
@@ -81,11 +86,37 @@ def parse_args():
         default="{path.parent.parent.stem}",
     )
 
-    return parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def resolve_smile_root(dataset: str, smile_root: Path | None) -> Path:
+    if smile_root is not None:
+        return smile_root
+    return Path("features") / "opensmile" / dataset
+
+
+def build_run_name(
+    *,
+    target: str,
+    dataset: str,
+    encoder_slug: str,
+    nonlinearity: str,
+    context_size: int,
+    experiment_label: str | None,
+) -> Path:
+    components = [
+        experiment_label,
+        dataset,
+        encoder_slug,
+        nonlinearity,
+        f"c{context_size}",
+    ]
+    return Path(target) / "_".join(component for component in components if component)
 
 
 def main():
     args = parse_args()
+    args.smile_root = resolve_smile_root(args.dataset, args.smile_root)
 
     L.seed_everything(args.seed, workers=True)
 
@@ -152,8 +183,13 @@ def main():
     )
 
     encoder_slug = content_encoder_slug(content_encoder)
-    run_name = Path(f"{args.target}") / (
-        f"{args.conversion}_{args.dataset}_{encoder_slug}_{args.nonlinearity}_c{args.context_size}"
+    run_name = build_run_name(
+        target=args.target,
+        dataset=args.dataset,
+        encoder_slug=encoder_slug,
+        nonlinearity=args.nonlinearity,
+        context_size=args.context_size,
+        experiment_label=args.experiment_label,
     )
 
     out_dir = args.out_dir or (Path("outputs") / run_name)
