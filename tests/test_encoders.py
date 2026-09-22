@@ -64,23 +64,32 @@ def test_content_encoder_layer_count() -> None:
 
 def test_build_weighted_sum_layer_fusion() -> None:
     encoder = ExampleContentEncoder()
+    encoder.layer = None
 
     fusion = build_layer_fusion("weighted-sum", encoder)
 
     assert isinstance(fusion, LayerWeightedSum)
     assert fusion.weights.shape == (1, 12)
-    assert content_encoder_slug(encoder, fusion) == "example-l4-wsum12"
+    assert content_encoder_slug(encoder, fusion) == "example-wsum12"
 
 
 def test_layer_count_override_supports_arbitrary_encoders() -> None:
+    encoder = ExampleContentEncoder()
+    encoder.layer = None
+
     fusion = build_layer_fusion(
         "weighted-sum",
-        ExampleContentEncoder(),
+        encoder,
         num_layers=7,
     )
 
     assert fusion is not None
     assert fusion.weights.shape == (1, 7)
+
+
+def test_fusion_rejects_selected_encoder_layer() -> None:
+    with pytest.raises(ValueError, match="return all layers"):
+        build_layer_fusion("weighted-sum", ExampleContentEncoder())
 
 
 def test_num_layers_requires_layer_fusion() -> None:
