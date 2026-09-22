@@ -71,9 +71,7 @@ class CorrelationAccumulator:
 
         var_x[usable] = self.sum_x2[usable] / n[usable] - mean_x[usable] ** 2
         var_y[usable] = self.sum_y2[usable] / n[usable] - mean_y[usable] ** 2
-        cov_xy[usable] = (
-            self.sum_xy[usable] / n[usable] - mean_x[usable] * mean_y[usable]
-        )
+        cov_xy[usable] = self.sum_xy[usable] / n[usable] - mean_x[usable] * mean_y[usable]
 
         # Guard against tiny negative values from floating-point error.
         var_x = np.maximum(var_x, 0.0)
@@ -83,9 +81,7 @@ class CorrelationAccumulator:
         pearson_denominator = np.sqrt(var_x * var_y)
         pearson_usable = usable & (pearson_denominator > 0)
 
-        pearson[pearson_usable] = (
-            cov_xy[pearson_usable] / pearson_denominator[pearson_usable]
-        )
+        pearson[pearson_usable] = cov_xy[pearson_usable] / pearson_denominator[pearson_usable]
 
         # Concordance correlation coefficient
         ccc_denominator = var_x + var_y + (mean_x - mean_y) ** 2
@@ -156,9 +152,7 @@ def load_feature_pair(
 
         if not common:
             raise ValueError(
-                f"No common numeric feature columns in:\n"
-                f"  {original_path}\n"
-                f"  {converted_path}"
+                f"No common numeric feature columns in:\n  {original_path}\n  {converted_path}"
             )
 
         feature_names = common
@@ -167,14 +161,10 @@ def load_feature_pair(
     missing_converted = set(feature_names) - set(converted_df.columns)
 
     if missing_original:
-        raise ValueError(
-            f"{original_path} is missing features: {sorted(missing_original)}"
-        )
+        raise ValueError(f"{original_path} is missing features: {sorted(missing_original)}")
 
     if missing_converted:
-        raise ValueError(
-            f"{converted_path} is missing features: {sorted(missing_converted)}"
-        )
+        raise ValueError(f"{converted_path} is missing features: {sorted(missing_converted)}")
 
     original = original_df[feature_names].to_numpy(dtype=np.float64)
     converted = converted_df[feature_names].to_numpy(dtype=np.float64)
@@ -208,16 +198,10 @@ def compute_split_correlations(
     missing_original = converted_files.keys() - original_files.keys()
 
     if missing_converted:
-        print(
-            f"Warning: {len(missing_converted)} original utterances "
-            f"have no converted features."
-        )
+        print(f"Warning: {len(missing_converted)} original utterances have no converted features.")
 
     if missing_original:
-        print(
-            f"Warning: {len(missing_original)} converted utterances "
-            f"have no original features."
-        )
+        print(f"Warning: {len(missing_original)} converted utterances have no original features.")
 
     print(f"Matched utterances: {len(common_utt_ids)}")
 
@@ -226,9 +210,7 @@ def compute_split_correlations(
 
     total_frames = 0
 
-    for index, utt_id in tqdm(
-        enumerate(common_utt_ids, start=1), total=len(common_utt_ids)
-    ):
+    for index, utt_id in tqdm(enumerate(common_utt_ids, start=1), total=len(common_utt_ids)):
         original, converted, current_features = load_feature_pair(
             original_files[utt_id],
             converted_files[utt_id],
@@ -259,10 +241,7 @@ def compute_split_correlations(
         total_frames += len(original)
 
         if index % 1000 == 0 or index == len(common_utt_ids):
-            print(
-                f"{index:>7}/{len(common_utt_ids)} utterances | "
-                f"{total_frames:,} aligned frames"
-            )
+            print(f"{index:>7}/{len(common_utt_ids)} utterances | {total_frames:,} aligned frames")
 
     assert accumulator is not None
 
@@ -331,10 +310,7 @@ def main() -> None:
 
     output = args.output
     if output is None:
-        output = (
-            args.feature_root
-            / f"{args.converted}_vs_{args.original} / {args.split}.csv"
-        )
+        output = args.feature_root / f"{args.converted}_vs_{args.original}" / f"{args.split}.csv"
 
     output.parent.mkdir(parents=True, exist_ok=True)
     results.to_csv(output, index=False)

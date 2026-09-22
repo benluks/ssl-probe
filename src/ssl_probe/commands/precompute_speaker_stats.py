@@ -5,11 +5,11 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from quick_convert.data import load_dataset
+from quick_convert.data.loading import load_dataset
 from quick_convert.data.resources import TemplateResourceProvider
 from tqdm import tqdm
 
-from ..targets.smile_parquet_store import SmileParquetStore
+from ..targets.store import SmileParquetStore
 from ..targets.target import LOG_F0, semitone_to_log_hz, valid_pitch_class
 
 

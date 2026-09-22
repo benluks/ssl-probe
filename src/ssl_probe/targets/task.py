@@ -131,15 +131,9 @@ class ClassificationTask(ProbeTask):
     def make_metrics(self) -> MetricCollection:
         return MetricCollection(
             {
-                "top1_accuracy": MulticlassAccuracy(
-                    num_classes=self.num_classes, top_k=1
-                ),
-                "top3_accuracy": MulticlassAccuracy(
-                    num_classes=self.num_classes, top_k=3
-                ),
-                "top5_accuracy": MulticlassAccuracy(
-                    num_classes=self.num_classes, top_k=5
-                ),
+                "top1_accuracy": MulticlassAccuracy(num_classes=self.num_classes, top_k=1),
+                "top3_accuracy": MulticlassAccuracy(num_classes=self.num_classes, top_k=3),
+                "top5_accuracy": MulticlassAccuracy(num_classes=self.num_classes, top_k=5),
                 "f1": MulticlassF1Score(
                     num_classes=self.num_classes,
                     average="macro",

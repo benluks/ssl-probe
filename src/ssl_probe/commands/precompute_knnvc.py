@@ -3,9 +3,8 @@ from pathlib import Path
 
 import torch
 import torchaudio
-from quick_convert.components.decoders import KnnVCHifiGanDecoder
 from quick_convert.components.ssl import WavLMContentEncoder
-from quick_convert.data import load_dataset
+from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
 
@@ -27,24 +26,29 @@ def parse_args():
         "--pattern",
         default="*",
     )
-    parser.add_argument(
-        "--hifigan-ckpt", choices=["original", "prematched"], default="original"
-    )
+    parser.add_argument("--hifigan-ckpt", choices=["original", "prematched"], default="original")
 
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
+
+    try:
+        from quick_convert.components.decoders import KnnVCHifiGanDecoder
+    except ImportError as error:
+        raise SystemExit(
+            "The installed Quick Convert version does not provide KnnVCHifiGanDecoder. "
+            "KNN-VC precomputation requires the legacy decoder integration."
+        ) from error
+
     wavlm = WavLMContentEncoder(layer=6)
     hifigan = KnnVCHifiGanDecoder.from_pretrained(args.hifigan_ckpt)
 
     out_folder = args.out_folder or f"knnvc_{args.hifigan_ckpt}"
     out_dir = Path(args.out_root) / out_folder / args.dataset
 
-    dataset = load_dataset(
-        args.dataset, root=args.root, splits=args.splits, pattern=args.pattern
-    )
+    dataset = load_dataset(args.dataset, root=args.root, splits=args.splits, pattern=args.pattern)
 
     for sample in tqdm(dataset):
         with torch.inference_mode():

@@ -1,5 +1,7 @@
 import opensmile
 
+OPENSMILE_LLD_FRAME_HZ = 100.0
+
 
 def init_opensmile(
     feature_set=opensmile.FeatureSet.eGeMAPSv02,

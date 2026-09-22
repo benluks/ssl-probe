@@ -7,10 +7,10 @@ import json
 from pathlib import Path
 
 import opensmile
-from quick_convert.data import load_dataset
+from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
-from ..opensmile_factory import init_opensmile
+from ..opensmile import OPENSMILE_LLD_FRAME_HZ, init_opensmile
 
 
 def parse_args():
@@ -50,9 +50,7 @@ def main():
 
     out_folder = args.out_folder or args.dataset
     if out_folder is None:
-        raise ValueError(
-            "you must set a dataset name in --dataset or pass --out-folder"
-        )
+        raise ValueError("you must set a dataset name in --dataset or pass --out-folder")
 
     out_dir = Path(args.out_root) / out_folder
     for split in args.splits:
@@ -62,6 +60,7 @@ def main():
         metadata = {
             "feature_set": feature_set.name,
             "feature_level": feature_level.name,
+            "frame_hz": OPENSMILE_LLD_FRAME_HZ,
             "split": split,
         }
 

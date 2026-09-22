@@ -1,10 +1,9 @@
-from .smile_parquet_store import SmileParquetStore
+from .store import SmileParquetStore
 from .target import TARGETS, FrameTarget
-from .task import BinaryAccuracy, ClassificationTask, RegressionTask
+from .task import ClassificationTask, RegressionTask
 
 __all__ = [
     "TARGETS",
-    "BinaryAccuracy",
     "ClassificationTask",
     "FrameTarget",
     "RegressionTask",

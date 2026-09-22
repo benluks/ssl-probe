@@ -1,20 +1,20 @@
 import argparse
+import json
 from pathlib import Path
 
 import lightning as L
 import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
-from quick_convert.pipelines.training import (
-    LightningTrainer,
-    Optimization,
-    TrainingPipeline,
-)
-from quick_convert.pipelines.training.optim.base import LinearWarmup
+from quick_convert.pipelines.training.pipeline import TrainingPipeline
+from quick_convert.training.lightning.optim import LinearWarmup, Optimization
+from quick_convert.training.lightning.trainer import LightningTrainer
 
-from .dataset import FrameDataset
-from .module import Probe
-from .targets import TARGETS
+from ..dataset import FrameDataset
+from ..encoders import build_content_encoder, content_encoder_slug
+from ..probe import Probe
+from ..targets import TARGETS
+from ..training import ProbeTrainingModule
 
 
 def parse_args():
@@ -25,13 +25,24 @@ def parse_args():
     parser.add_argument("--dataset", type=str, default="librispeech")
     parser.add_argument("--train-split", default="train-clean-100")
     parser.add_argument("--val-split", default="dev-clean")
-    parser.add_argument("--layer", type=int, default=6)
+    parser.add_argument(
+        "--encoder",
+        default="wavlm",
+        help="Encoder alias (wavlm, w2vbert, dac) or dotted ContentEncoder class path.",
+    )
+    parser.add_argument(
+        "--encoder-kwargs",
+        type=json.loads,
+        default={},
+        metavar="JSON",
+        help="JSON constructor arguments, for example '{\"layer\": 12}'.",
+    )
     parser.add_argument("--context-size", type=int, default=1)
 
     parser.add_argument(
         "--target",
         choices=TARGETS,
-        default="pitch",
+        default="logf0",
     )
 
     parser.add_argument("--frame-batch-size", type=int, default=8192)
@@ -81,15 +92,16 @@ def main():
     config = vars(args).copy()
 
     target = TARGETS[args.target]
+    content_encoder = build_content_encoder(args.encoder, args.encoder_kwargs)
 
     train_dataset = FrameDataset(
+        content_encoder=content_encoder,
         root=args.root,
         dataset_name=args.dataset,
         splits=[args.train_split],
         smile_root=args.smile_root / args.train_split,
         speaker_stats=args.speaker_stats,
         spk_id_template=args.spk_id_template,
-        layer=args.layer,
         target=target,
         context_size=args.context_size,
         frame_batch_size=args.frame_batch_size,
@@ -100,13 +112,13 @@ def main():
         None
         if args.val_split is None
         else FrameDataset(
+            content_encoder=content_encoder,
             root=args.root,
             dataset_name=args.dataset,
             splits=[args.val_split],
             smile_root=args.smile_root / args.val_split,
             speaker_stats=args.speaker_stats,
             spk_id_template=args.spk_id_template,
-            layer=args.layer,
             target=target,
             context_size=args.context_size,
             frame_batch_size=args.frame_batch_size,
@@ -115,12 +127,16 @@ def main():
         )
     )
 
-    module = Probe(
-        input_dim=train_dataset.content_encoder.encoder.feature_dim
-        * train_dataset.context_size,
-        target=target,
+    probe = Probe(
+        input_dim=train_dataset.feature_dim * train_dataset.context_size,
+        output_dim=target.task.output_dim,
         hidden_dim=args.hidden_dim,
         nonlinearity=args.nonlinearity,
+    )
+
+    module = ProbeTrainingModule(
+        probe=probe,
+        target=target,
         optimization=Optimization(
             optimizer=torch.optim.AdamW,
             optimizer_kwargs={
@@ -135,9 +151,9 @@ def main():
         ),
     )
 
-    run_name = (
-        Path(f"{args.target}")
-        / f"{args.conversion}_{args.dataset}_wavlm_l{args.layer}_{args.nonlinearity}_c{args.context_size}"
+    encoder_slug = content_encoder_slug(content_encoder)
+    run_name = Path(f"{args.target}") / (
+        f"{args.conversion}_{args.dataset}_{encoder_slug}_{args.nonlinearity}_c{args.context_size}"
     )
 
     out_dir = args.out_dir or (Path("outputs") / run_name)
@@ -161,9 +177,7 @@ def main():
                 ModelCheckpoint(monitor="val/loss", mode="min", save_last=False),
                 LearningRateMonitor(logging_interval="step"),
             ],
-            "logger": WandbLogger(
-                name=str(run_name), save_dir=out_dir, project="ssl-probe"
-            ),
+            "logger": WandbLogger(name=str(run_name), save_dir=out_dir, project="ssl-probe"),
         },
     )
 
