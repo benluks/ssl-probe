@@ -9,7 +9,7 @@ from quick_convert.data.loading import load_dataset
 from quick_convert.data.resources import TemplateResourceProvider
 from tqdm import tqdm
 
-from ..paths import utterance_relative_path
+from ..paths import dataset_utt_id_overrides, utterance_relative_path
 from ..targets.store import SmileParquetStore
 from ..targets.target import LOG_F0, semitone_to_log_hz, valid_pitch_class
 
@@ -52,11 +52,7 @@ def parse_args():
 def main():
     args = parse_args()
 
-    dataset_kwargs = {}
-    if args.utt_id_template is not None:
-        dataset_kwargs["utt_id_template"] = args.utt_id_template
-    elif args.dataset is None:
-        dataset_kwargs["utt_id_template"] = "{path.stem}"
+    dataset_kwargs = dataset_utt_id_overrides(args.dataset, args.utt_id_template)
 
     dataset = load_dataset(
         name=args.dataset,
