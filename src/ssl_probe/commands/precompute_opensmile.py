@@ -11,6 +11,7 @@ from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
 from ..opensmile import OPENSMILE_LLD_FRAME_HZ, init_opensmile
+from ..paths import utterance_relative_path
 
 
 def parse_args():
@@ -67,12 +68,13 @@ def main():
         (split_dir / "_metadata.json").write_text(json.dumps(metadata, indent=2))
 
     for sample in tqdm(dataset, desc="+".join(args.splits)):
-        out_path = out_dir / sample.split / f"{sample.utt_id}.parquet"
+        relative_path = utterance_relative_path(sample.utt_id, sample.split)
+        out_path = out_dir / relative_path.parent / f"{relative_path.name}.parquet"
 
         if out_path.exists():
             continue
 
-        # out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
         waveform = sample.waveform
 
