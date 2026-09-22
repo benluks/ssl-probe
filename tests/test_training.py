@@ -77,9 +77,7 @@ def test_normalized_layer_weights_and_json_export(tmp_path) -> None:
     assert payload["num_layers"] == 2
     assert payload["normalized_weights"] == pytest.approx([0.25, 0.75])
     assert [layer["layer"] for layer in payload["layers"]] == [0, 1]
-    assert [layer["weight"] for layer in payload["layers"]] == pytest.approx(
-        [0.25, 0.75]
-    )
+    assert [layer["weight"] for layer in payload["layers"]] == pytest.approx([0.25, 0.75])
 
 
 def test_layer_weight_logging_uses_quick_convert_media_logger() -> None:
