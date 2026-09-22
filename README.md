@@ -57,8 +57,12 @@ ssl-probe train \\
   --target logf0
 ```
 
-The encoder must expose its required `sample_rate` and return one vector per frame. Encoders with
-multiple layer vectors per frame should be configured to select a layer or wrapped in an adapter.
+The encoder must expose its required `sample_rate` and `frame_hz`, and return one vector per
+frame. Probe targets are sampled at encoder-frame times using the encoder and openSMILE timebases;
+they are not stretched proportionally to the encoder sequence length. Existing openSMILE outputs
+without frame-rate metadata are treated as the standard 100 Hz low-level-descriptor stream.
+Encoders with multiple layer vectors per frame should be configured to select a layer or wrapped
+in an adapter.
 
 ### Precompute openSMILE features
 
@@ -80,3 +84,4 @@ uv run pytest
 ```
 
 The package uses a `src/` layout; importable code lives under `src/ssl_probe/`.
+

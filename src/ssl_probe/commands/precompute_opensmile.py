@@ -10,7 +10,7 @@ import opensmile
 from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
-from ..opensmile import init_opensmile
+from ..opensmile import OPENSMILE_LLD_FRAME_HZ, init_opensmile
 
 
 def parse_args():
@@ -60,6 +60,7 @@ def main():
         metadata = {
             "feature_set": feature_set.name,
             "feature_level": feature_level.name,
+            "frame_hz": OPENSMILE_LLD_FRAME_HZ,
             "split": split,
         }
 

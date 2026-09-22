@@ -16,17 +16,27 @@ class ExampleContentEncoder(ContentEncoder):
 
     def __init__(self) -> None:
         super().__init__(device="cpu")
-        self.sample_rate = 16_000
         self.layer = 4
+
+    @property
+    def sample_rate(self) -> int:
+        return 16_000
+
+    @property
+    def frame_hz(self) -> float:
+        return 50.0
+
+    def forward(self, batch, **kwargs) -> ContentFeatures:
+        raise NotImplementedError
 
     def encode_file(self, path: str | Path) -> ContentFeatures:
         raise NotImplementedError
 
     def encode_waveforms(
         self,
-        wavs: torch.FloatTensor,
+        waveforms: torch.FloatTensor,
         lengths: torch.LongTensor | None = None,
-        sample_rates: torch.LongTensor | None = None,
+        sample_rate: int | None = None,
     ) -> ContentFeatures:
         raise NotImplementedError
 
