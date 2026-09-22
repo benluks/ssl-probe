@@ -59,10 +59,7 @@ class ProbeTrainingModule(BaseTrainingModule):
             return
 
         self.log_dict(
-            {
-                f"layer_weights/layer_{index:02d}": weight
-                for index, weight in enumerate(weights)
-            },
+            {f"layer_weights/layer_{index:02d}": weight for index, weight in enumerate(weights)},
             on_step=True,
             on_epoch=False,
             prog_bar=False,
@@ -91,8 +88,7 @@ class ProbeTrainingModule(BaseTrainingModule):
             "logits": logits.detach().cpu().tolist(),
             "normalized_weights": weights_list,
             "layers": [
-                {"layer": index, "weight": weight}
-                for index, weight in enumerate(weights_list)
+                {"layer": index, "weight": weight} for index, weight in enumerate(weights_list)
             ],
         }
 
