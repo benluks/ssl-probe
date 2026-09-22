@@ -65,9 +65,7 @@ def make_module(with_fusion: bool = True) -> ProbeTrainingModule:
 def test_normalized_layer_weights_and_json_export(tmp_path) -> None:
     module = make_module()
     with torch.no_grad():
-        module.layer_fusion.weights.copy_(
-            torch.tensor([[0.0, math.log(3.0)]])
-        )
+        module.layer_fusion.weights.copy_(torch.tensor([[0.0, math.log(3.0)]]))
 
     weights = module.normalized_layer_weights()
     output_path = module.export_layer_weights(tmp_path / "layer_weights.json")
