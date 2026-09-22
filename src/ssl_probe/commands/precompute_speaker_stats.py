@@ -38,7 +38,11 @@ def parse_args():
         default="speaker_stats",
     )
 
-    parser.add_argument("--utt-id-template", default="{path.stem}")
+    parser.add_argument(
+        "--utt-id-template",
+        default=None,
+        help="Optional override. Named datasets use their Quick Convert template.",
+    )
     parser.add_argument("--spk-id-template", default="{path.parent.parent.stem}")
 
     return parser.parse_args()
@@ -47,12 +51,17 @@ def parse_args():
 def main():
     args = parse_args()
 
+    dataset_kwargs = {}
+    if args.utt_id_template is not None:
+        dataset_kwargs["utt_id_template"] = args.utt_id_template
+    elif args.dataset is None:
+        dataset_kwargs["utt_id_template"] = "{path.stem}"
+
     dataset = load_dataset(
         name=args.dataset,
         root=args.root,
         splits=args.splits,
         load=[],
-        utt_id_template=args.utt_id_template,
         additional_resource_providers=[
             TemplateResourceProvider(
                 name="spk_id",
@@ -60,6 +69,7 @@ def main():
                 kind="text",
             )
         ],
+        **dataset_kwargs,
     )
 
     features_root = Path(args.features_root) / args.features_folder
