@@ -25,7 +25,11 @@ def parse_args():
         default="features/opensmile",
     )
     parser.add_argument("--out-folder", default=None)
-    parser.add_argument("--utt-id-template", default="{path.stem}")
+    parser.add_argument(
+        "--utt-id-template",
+        default=None,
+        help="Optional override. Named datasets use their Quick Convert template.",
+    )
 
     return parser.parse_args()
 
@@ -33,12 +37,18 @@ def parse_args():
 def main():
     args = parse_args()
 
+    dataset_kwargs = {}
+    if args.utt_id_template is not None:
+        dataset_kwargs["utt_id_template"] = args.utt_id_template
+    elif args.dataset is None:
+        dataset_kwargs["utt_id_template"] = "{path.stem}"
+
     dataset = load_dataset(
         name=args.dataset,
         root=args.root,
         splits=args.splits,
         load=["audio"],
-        utt_id_template=args.utt_id_template,
+        **dataset_kwargs,
     )
 
     feature_set = opensmile.FeatureSet.eGeMAPSv02
