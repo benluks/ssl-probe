@@ -113,5 +113,19 @@ uv run ruff check --select B,E4,E7,E9,F,I,UP src/ssl_probe tests
 uv run pytest
 ```
 
+### Model-backed smoke tests
+
+Real-model tests are excluded from the fast suite because they install optional dependencies and
+download checkpoints. To verify S3Tokenizer's real 12-layer output and trainable fusion path:
+
+```bash
+uv sync --group dev --group model-test
+SSL_PROBE_RUN_MODEL_TESTS=1 uv run --no-sync pytest -m model tests/model
+```
+
+The S3Tokenizer ONNX checkpoint is downloaded to `~/.cache/s3tokenizer`. The same test can be
+run on GitHub by manually dispatching the **CI** workflow; its `model-smoke` job caches that
+checkpoint between runs.
+
 The package uses a `src/` layout; importable code lives under `src/ssl_probe/`.
 

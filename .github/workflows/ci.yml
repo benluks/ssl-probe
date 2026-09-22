@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - "llm/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -34,3 +35,25 @@ jobs:
           /tmp/ssl-probe-wheel-smoke/bin/pip install --no-deps dist/*.whl
           cd /tmp
           /tmp/ssl-probe-wheel-smoke/bin/ssl-probe --help | grep precompute
+
+  model-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Cache S3Tokenizer checkpoint
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/s3tokenizer
+          key: s3tokenizer-v3-25hz-${{ runner.os }}
+      - name: Install model test environment
+        run: uv sync --group dev --group model-test
+      - name: Run S3Tokenizer fusion smoke test
+        env:
+          SSL_PROBE_RUN_MODEL_TESTS: "1"
+        run: uv run --no-sync pytest -m model tests/model
