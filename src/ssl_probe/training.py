@@ -38,9 +38,9 @@ class ProbeTrainingModule(BaseTrainingModule):
         return self.probe(x)
 
     def _shared_step(self, batch: AudioBatch, stage: str) -> ProbeOutput:
-        x = batch.resources["content"].values.flatten(1)
+        x = batch.resources["content"].values
         target = batch.resources[self.target.name].values[:, 0]
-        result = self.target.task.compute(self.probe(x), target)
+        result = self.target.task.compute(self(x), target)
 
         self.log(
             f"{stage}/loss",
