@@ -7,6 +7,8 @@ from quick_convert.components.ssl import WavLMContentEncoder
 from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
+from ..paths import utterance_relative_path
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -54,7 +56,8 @@ if __name__ == "__main__":
         with torch.inference_mode():
             waveform = hifigan(wavlm.encode_file(sample.path).values)
 
-        outf = Path(out_dir) / sample.split / f"{sample.utt_id}.flac"
-        outf.parent.mkdir(exist_ok=True, parents=True)
+        relative_path = utterance_relative_path(sample.utt_id, sample.split)
+        output_path = Path(out_dir) / relative_path.parent / f"{relative_path.name}.flac"
+        output_path.parent.mkdir(exist_ok=True, parents=True)
 
-        torchaudio.save(outf, waveform.cpu(), sample_rate=hifigan.sample_rate)
+        torchaudio.save(output_path, waveform.cpu(), sample_rate=hifigan.sample_rate)
