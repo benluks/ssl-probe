@@ -11,7 +11,7 @@ from quick_convert.training.lightning.optim import LinearWarmup, Optimization
 from quick_convert.training.lightning.trainer import LightningTrainer
 
 from ..dataset import FrameDataset
-from ..encoders import build_content_encoder, content_encoder_slug
+from ..encoders import build_content_encoder, build_layer_fusion, content_encoder_slug
 from ..probe import Probe
 from ..targets import TARGETS
 from ..training import ProbeTrainingModule
@@ -38,6 +38,18 @@ def parse_args(argv: list[str] | None = None):
         help="JSON constructor arguments, for example '{\"layer\": 12}'.",
     )
     parser.add_argument("--context-size", type=int, default=1)
+    parser.add_argument(
+        "--layer-fusion",
+        choices=["none", "weighted-sum"],
+        default="none",
+        help="How to combine multi-layer encoder output before probing.",
+    )
+    parser.add_argument(
+        "--num-layers",
+        type=int,
+        default=None,
+        help="Output layer count override for encoders whose metadata cannot be inspected.",
+    )
 
     parser.add_argument(
         "--target",
@@ -124,6 +136,11 @@ def main():
 
     target = TARGETS[args.target]
     content_encoder = build_content_encoder(args.encoder, args.encoder_kwargs)
+    layer_fusion = build_layer_fusion(
+        args.layer_fusion,
+        content_encoder,
+        args.num_layers,
+    )
 
     train_dataset = FrameDataset(
         content_encoder=content_encoder,
@@ -137,6 +154,7 @@ def main():
         context_size=args.context_size,
         frame_batch_size=args.frame_batch_size,
         inference_frame_budget=10 * args.frame_batch_size,
+        preserve_layers=layer_fusion is not None,
     )
 
     val_dataset = (
@@ -155,6 +173,7 @@ def main():
             frame_batch_size=args.frame_batch_size,
             inference_frame_budget=10 * args.frame_batch_size,
             shuffle=False,
+            preserve_layers=layer_fusion is not None,
         )
     )
 
@@ -163,6 +182,7 @@ def main():
         output_dim=target.task.output_dim,
         hidden_dim=args.hidden_dim,
         nonlinearity=args.nonlinearity,
+        feature_transform=layer_fusion,
     )
 
     module = ProbeTrainingModule(
@@ -182,7 +202,7 @@ def main():
         ),
     )
 
-    encoder_slug = content_encoder_slug(content_encoder)
+    encoder_slug = content_encoder_slug(content_encoder, layer_fusion)
     run_name = build_run_name(
         target=args.target,
         dataset=args.dataset,
