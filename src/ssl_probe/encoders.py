@@ -58,14 +58,31 @@ def build_layer_fusion(
     if mode != "weighted-sum":
         raise ValueError(f"Unknown layer fusion mode: {mode!r}.")
 
-    resolved_num_layers = num_layers or content_encoder_num_layers(encoder)
+    layer = getattr(encoder, "layer", None)
+    if layer not in (None, -1):
+        raise ValueError(
+            "Layer fusion requires the encoder to return all layers; "
+            "configure its layer argument accordingly."
+        )
+
+    representation = getattr(encoder, "representation", None)
+    if representation not in (None, "encoder"):
+        raise ValueError(
+            "Layer fusion is available only for multi-layer encoder representations, "
+            f"not representation={representation!r}."
+        )
+
+    if num_layers is not None and num_layers <= 0:
+        raise ValueError("The number of representation layers must be positive.")
+
+    resolved_num_layers = (
+        num_layers if num_layers is not None else content_encoder_num_layers(encoder)
+    )
     if resolved_num_layers is None:
         raise ValueError(
             f"Cannot infer the number of output layers from {type(encoder).__name__}; "
             "pass --num-layers explicitly."
         )
-    if resolved_num_layers <= 0:
-        raise ValueError("The number of representation layers must be positive.")
 
     return LayerWeightedSum(num_layers=resolved_num_layers)
 
