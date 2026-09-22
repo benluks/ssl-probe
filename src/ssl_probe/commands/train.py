@@ -50,6 +50,12 @@ def parse_args(argv: list[str] | None = None):
         default=None,
         help="Output layer count override for encoders whose metadata cannot be inspected.",
     )
+    parser.add_argument(
+        "--layer-log-interval",
+        type=int,
+        default=1000,
+        help="Training-step interval for normalized layer-weight logging.",
+    )
 
     parser.add_argument(
         "--target",
@@ -188,6 +194,7 @@ def main():
     module = ProbeTrainingModule(
         probe=probe,
         target=target,
+        layer_log_interval=args.layer_log_interval,
         optimization=Optimization(
             optimizer=torch.optim.AdamW,
             optimizer_kwargs={
@@ -243,8 +250,12 @@ def main():
         val_dataset=val_dataset,
         out_dir=out_dir,
     )
+    run_dir = pipeline.prepare()
     trainer.pl_trainer.logger.log_hyperparams(config)
     pipeline.run()
+
+    if trainer.pl_trainer.is_global_zero:
+        module.export_layer_weights(run_dir / "layer_weights.json")
 
 
 if __name__ == "__main__":
