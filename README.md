@@ -40,6 +40,7 @@ ssl-probe train \
   --encoder wavlm \
   --encoder-kwargs '{"layer": 6}' \
   --target logf0 \
+  --target-normalization standardize \
   --smile-root features/opensmile/librispeech
 ```
 
@@ -58,6 +59,14 @@ ssl-probe train \
 ```
 
 The probe itself is a plain PyTorch module. Quick Convert's Lightning training adapter and pipeline infrastructure are used only for training orchestration.
+
+The target registry covers all 25 eGeMAPSv02 low-level descriptor columns. Derived pitch and
+formant targets such as `smn_logf0`, `voiced`, `semitone`, and `f1_bin` remain available in
+addition to the continuous source targets. For regression, `--target-normalization standardize`
+computes mean and standard deviation from valid transformed training frames, trains against
+z-scored values, and reports metrics on the unstandardized transformed scale. The fitted moments
+are written to `target_standardization.json` in the run directory. Pearson correlation and
+concordance correlation are reported alongside MAE, MSE, RMSE, and R².
 
 The representation encoder is not tied to WavLM. Quick Convert owns the built-in aliases
 `dac`, `emotion2vec`, `pros2vec`, `s3tokenizer`, `w2vbert`, and `wavlm`. Any Quick Convert
