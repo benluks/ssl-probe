@@ -46,9 +46,7 @@ def test_target_registry_covers_all_egemaps_lld_sources() -> None:
 
 
 def test_spectral_flux_masks_invalid_values_before_log_transform() -> None:
-    values, valid = SPECTRAL_FLUX.apply(
-        torch.tensor([-1.0, 0.0, 1.0, float("nan")])
-    )
+    values, valid = SPECTRAL_FLUX.apply(torch.tensor([-1.0, 0.0, 1.0, float("nan")]))
 
     assert torch.equal(valid, torch.tensor([False, True, True, False]))
     assert torch.allclose(values, torch.tensor([0.0, 0.0, math.log(2.0), 0.0]))
