@@ -32,6 +32,4 @@ def test_generic_dataset_defaults_to_filename_stem() -> None:
 
 
 def test_explicit_utterance_template_overrides_dataset_config() -> None:
-    assert dataset_utt_id_overrides("clac", "{path.name}") == {
-        "utt_id_template": "{path.name}"
-    }
+    assert dataset_utt_id_overrides("clac", "{path.name}") == {"utt_id_template": "{path.name}"}
