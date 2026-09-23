@@ -9,6 +9,7 @@ from quick_convert.data.loading import load_dataset
 from quick_convert.data.resources import TemplateResourceProvider
 from tqdm import tqdm
 
+from ..paths import dataset_utt_id_overrides, utterance_relative_path
 from ..targets.store import SmileParquetStore
 from ..targets.target import LOG_F0, semitone_to_log_hz, valid_pitch_class
 
@@ -38,7 +39,11 @@ def parse_args():
         default="speaker_stats",
     )
 
-    parser.add_argument("--utt-id-template", default="{path.stem}")
+    parser.add_argument(
+        "--utt-id-template",
+        default=None,
+        help="Optional override. Named datasets use their Quick Convert template.",
+    )
     parser.add_argument("--spk-id-template", default="{path.parent.parent.stem}")
 
     return parser.parse_args()
@@ -47,12 +52,13 @@ def parse_args():
 def main():
     args = parse_args()
 
+    dataset_kwargs = dataset_utt_id_overrides(args.dataset, args.utt_id_template)
+
     dataset = load_dataset(
         name=args.dataset,
         root=args.root,
         splits=args.splits,
         load=[],
-        utt_id_template=args.utt_id_template,
         additional_resource_providers=[
             TemplateResourceProvider(
                 name="spk_id",
@@ -60,23 +66,22 @@ def main():
                 kind="text",
             )
         ],
+        **dataset_kwargs,
     )
 
     features_root = Path(args.features_root) / args.features_folder
 
-    stores = {
-        split: SmileParquetStore(
-            smile_root=features_root / split,
-            feature_column=LOG_F0.source,
-        )
-        for split in args.splits
-    }
+    store = SmileParquetStore(
+        smile_root=features_root,
+        feature_column=LOG_F0.source,
+    )
 
     sums = defaultdict(float)
     counts = defaultdict(int)
 
     for sample in tqdm(dataset, desc="+".join(args.splits)):
-        semitone = stores[sample.split][sample.utt_id]
+        relative_path = utterance_relative_path(sample.utt_id, sample.split)
+        semitone = store[str(relative_path)]
 
         valid = valid_pitch_class(semitone)
         semitone = semitone[valid]

@@ -109,6 +109,47 @@ ssl-probe precompute opensmile \
   --splits train-clean-100 dev-clean
 ```
 
+### CLAC KNN-VC resynthesis correlations
+
+CLAC uses split-qualified utterance IDs such as `picnic/1234`. To resynthesize
+WavLM layer 6 with the KNN-VC HiFiGAN checkpoint trained on original features,
+then compare frame-level openSMILE features:
+
+```bash
+export QUICK_CONVERT_CLAC_ROOT=/path/to/clac
+SPLITS=(picnic rainbow max_phonation smr)
+
+ssl-probe precompute knnvc \
+  --root "$QUICK_CONVERT_CLAC_ROOT" \
+  --dataset clac \
+  --splits "${SPLITS[@]}" \
+  --hifigan-ckpt original \
+  --out-root converted \
+  --out-folder knnvc_l6_original
+
+ssl-probe precompute opensmile \
+  --root "$QUICK_CONVERT_CLAC_ROOT" \
+  --dataset clac \
+  --splits "${SPLITS[@]}" \
+  --out-folder clac
+
+ssl-probe precompute opensmile \
+  --root converted/knnvc_l6_original/clac \
+  --splits "${SPLITS[@]}" \
+  --out-folder knnvc_l6_original_clac
+
+for split in "${SPLITS[@]}"; do
+  ssl-probe correlate "$split" \
+    --feature-root features/opensmile \
+    --original clac \
+    --converted knnvc_l6_original_clac
+done
+```
+
+The converted-audio extraction intentionally omits `--dataset clac`: KNN-VC
+writes FLAC files, while the original CLAC dataset configuration selects WAV
+inputs. The generic loader preserves the same split-relative output layout.
+
 ## Development
 
 Formatting, linting, tests, and a wheel smoke test run in GitHub Actions. The corresponding local checks are:

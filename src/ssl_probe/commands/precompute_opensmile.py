@@ -11,6 +11,7 @@ from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
 from ..opensmile import OPENSMILE_LLD_FRAME_HZ, init_opensmile
+from ..paths import dataset_utt_id_overrides, utterance_relative_path
 
 
 def parse_args():
@@ -24,7 +25,11 @@ def parse_args():
         default="features/opensmile",
     )
     parser.add_argument("--out-folder", default=None)
-    parser.add_argument("--utt-id-template", default="{path.stem}")
+    parser.add_argument(
+        "--utt-id-template",
+        default=None,
+        help="Optional override. Named datasets use their Quick Convert template.",
+    )
 
     return parser.parse_args()
 
@@ -32,12 +37,14 @@ def parse_args():
 def main():
     args = parse_args()
 
+    dataset_kwargs = dataset_utt_id_overrides(args.dataset, args.utt_id_template)
+
     dataset = load_dataset(
         name=args.dataset,
         root=args.root,
         splits=args.splits,
         load=["audio"],
-        utt_id_template=args.utt_id_template,
+        **dataset_kwargs,
     )
 
     feature_set = opensmile.FeatureSet.eGeMAPSv02
@@ -67,12 +74,13 @@ def main():
         (split_dir / "_metadata.json").write_text(json.dumps(metadata, indent=2))
 
     for sample in tqdm(dataset, desc="+".join(args.splits)):
-        out_path = out_dir / sample.split / f"{sample.utt_id}.parquet"
+        relative_path = utterance_relative_path(sample.utt_id, sample.split)
+        out_path = out_dir / relative_path.parent / f"{relative_path.name}.parquet"
 
         if out_path.exists():
             continue
 
-        # out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
         waveform = sample.waveform
 
