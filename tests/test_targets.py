@@ -2,10 +2,10 @@ import math
 from types import SimpleNamespace
 
 import torch
+
 from ssl_probe.dataset import FrameDataset
 from ssl_probe.targets.target import HNR, SPECTRAL_FLUX, TARGETS
 from ssl_probe.targets.task import RegressionTask, TargetStandardization
-
 
 EGEMAPS_LLD_SOURCES = {
     "Loudness_sma3",
