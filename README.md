@@ -60,6 +60,44 @@ ssl-probe train \
 
 The probe itself is a plain PyTorch module. Quick Convert's Lightning training adapter and pipeline infrastructure are used only for training orchestration.
 
+For datasets that need a custom train/validation partition, pass a pair of Quick Convert flat
+manifests instead of `--root` and named splits. The manifests must contain `utt_id`, `path`, and
+`split` columns. For CLAC, Quick Convert can build a flat manifest and split speakers disjointly:
+
+```bash
+export QUICK_CONVERT_CLAC_ROOT=/path/to/CLAC-Dataset
+
+quick-convert build_flat_manifest_clac
+python -m quick_convert.cli.split_manifest \
+  --input outputs/clac/manifest.csv \
+  --train-output outputs/clac/speaker_split/train.csv \
+  --valid-output outputs/clac/speaker_split/val.csv \
+  --strategy group-disjoint \
+  --group-col spkid \
+  --valid-fraction 0.1 \
+  --seed 115
+
+ssl-probe train \
+  --dataset clac \
+  --train-manifest outputs/clac/speaker_split/train.csv \
+  --val-manifest outputs/clac/speaker_split/val.csv \
+  --smile-root features/opensmile/clac \
+  --encoder wavlm \
+  --encoder-kwargs '{"layer": 6}' \
+  --target logf0 \
+  --target-normalization standardize \
+  --context-size 3 \
+  --hidden-dim 512 \
+  --frame-batch-size 1024 \
+  --max-steps 10000 \
+  --val-check-interval 2000 \
+  --spk-id-template '{path.stem}'
+```
+
+CLAC manifest IDs already have the form `elicitation/speaker`, so manifest-backed training uses
+the common openSMILE root directly rather than appending one named split. Omit
+`--target-normalization standardize` for classification targets such as the bin targets.
+
 The target registry covers all 25 eGeMAPSv02 low-level descriptor columns. Derived pitch and
 formant targets such as `smn_logf0`, `voiced`, `semitone`, and `f1_bin` remain available in
 addition to the continuous source targets. For regression, `--target-normalization standardize`

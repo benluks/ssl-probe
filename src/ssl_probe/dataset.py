@@ -10,7 +10,7 @@ from pathlib import Path
 import torch
 import torchaudio
 from quick_convert.components.ssl import ContentEncoder
-from quick_convert.data import AudioBatch, AudioSample
+from quick_convert.data import AudioBatch, AudioSample, ManifestDataset
 from quick_convert.data.loading import load_dataset
 from quick_convert.data.resources import (
     ResourceCollection,
@@ -88,6 +88,7 @@ class FrameDataset(IterableDataset):
         root="/Users/ben/librispeech/LibriSpeech",
         dataset_name: str | None = "librispeech",
         splits=("test-other",),
+        manifest_path: PathLike | None = None,
         context_size=1,
         inference_frame_budget=10_000,
         frame_batch_size=512,
@@ -113,14 +114,20 @@ class FrameDataset(IterableDataset):
             RESOURCE_PROVIDERS[name](spk_id_template) for name in self.target.resources
         ]
 
-        self.base_dataset = load_dataset(
-            dataset_name,
-            root=root,
-            splits=list(splits),
-            load=["audio"],
-            target_sr=self._encoder_sample_rate(),
-            additional_resource_providers=additional_resource_providers,
-        )
+        dataset_kwargs = {
+            "load": ["audio"],
+            "target_sr": self._encoder_sample_rate(),
+            "additional_resource_providers": additional_resource_providers,
+        }
+        if manifest_path is not None:
+            self.base_dataset = ManifestDataset(manifest_path, **dataset_kwargs)
+        else:
+            self.base_dataset = load_dataset(
+                dataset_name,
+                root=root,
+                splits=list(splits),
+                **dataset_kwargs,
+            )
 
         self.stores = {}
 

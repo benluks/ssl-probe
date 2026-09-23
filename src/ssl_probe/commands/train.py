@@ -22,10 +22,20 @@ def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
 
     # Data / representation
-    parser.add_argument("--root", required=True)
+    parser.add_argument("--root")
     parser.add_argument("--dataset", type=str, default="librispeech")
     parser.add_argument("--train-split", default="train-clean-100")
     parser.add_argument("--val-split", default="dev-clean")
+    parser.add_argument(
+        "--train-manifest",
+        type=Path,
+        help="CSV manifest for training. Must be paired with --val-manifest.",
+    )
+    parser.add_argument(
+        "--val-manifest",
+        type=Path,
+        help="CSV manifest for validation. Must be paired with --train-manifest.",
+    )
     parser.add_argument(
         "--encoder",
         default="wavlm",
@@ -114,13 +124,33 @@ def parse_args(argv: list[str] | None = None):
         default="{path.parent.parent.stem}",
     )
 
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    using_manifests = args.train_manifest is not None or args.val_manifest is not None
+    if using_manifests:
+        if args.train_manifest is None or args.val_manifest is None:
+            parser.error("--train-manifest and --val-manifest must be provided together")
+        if args.root is not None:
+            parser.error("--root cannot be combined with manifest-backed training")
+    elif args.root is None:
+        parser.error("--root is required unless train and validation manifests are provided")
+    return args
 
 
 def resolve_smile_root(dataset: str, smile_root: Path | None) -> Path:
     if smile_root is not None:
         return smile_root
     return Path("features") / "opensmile" / dataset
+
+
+def resolve_split_smile_root(
+    smile_root: Path,
+    split: str,
+    manifest_path: Path | None,
+) -> Path:
+    """Resolve feature paths without duplicating split-qualified manifest IDs."""
+    if manifest_path is not None:
+        return smile_root
+    return smile_root / split
 
 
 def build_run_name(
@@ -163,7 +193,12 @@ def main():
         root=args.root,
         dataset_name=args.dataset,
         splits=[args.train_split],
-        smile_root=args.smile_root / args.train_split,
+        manifest_path=args.train_manifest,
+        smile_root=resolve_split_smile_root(
+            args.smile_root,
+            args.train_split,
+            args.train_manifest,
+        ),
         speaker_stats=args.speaker_stats,
         spk_id_template=args.spk_id_template,
         target=target,
@@ -196,7 +231,12 @@ def main():
             root=args.root,
             dataset_name=args.dataset,
             splits=[args.val_split],
-            smile_root=args.smile_root / args.val_split,
+            manifest_path=args.val_manifest,
+            smile_root=resolve_split_smile_root(
+                args.smile_root,
+                args.val_split,
+                args.val_manifest,
+            ),
             speaker_stats=args.speaker_stats,
             spk_id_template=args.spk_id_template,
             target=target,

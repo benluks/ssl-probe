@@ -4,7 +4,16 @@ import pytest
 import torch
 
 from ssl_probe.dataset import FrameDataset
-from ssl_probe.targets import SmileParquetStore
+from ssl_probe.targets import TARGETS, SmileParquetStore
+
+
+class FakeContentEncoder:
+    sample_rate = 16_000
+    frame_hz = 50.0
+    feature_dim = 8
+
+    def eval(self):
+        return self
 
 
 def test_align_target_frames_to_encoder_length() -> None:
@@ -117,3 +126,28 @@ def test_smile_store_defaults_existing_outputs_to_100_hz(tmp_path) -> None:
     store = SmileParquetStore(tmp_path, feature_column="feature")
 
     assert store.frame_hz == 100.0
+
+
+def test_frame_dataset_accepts_split_qualified_manifest_ids(tmp_path, monkeypatch) -> None:
+    manifest = tmp_path / "train.csv"
+    manifest.write_text(
+        "utt_id,path,split,spkid\n"
+        "picnic/1234,/audio/picnic/1234.wav,picnic,1234\n"
+        "rainbow/5678,/audio/rainbow/5678.wav,rainbow,5678\n"
+    )
+    smile_root = tmp_path / "features" / "opensmile" / "clac"
+    monkeypatch.setattr(FrameDataset, "_estimate_reference_frames", lambda self, path: 10)
+
+    dataset = FrameDataset(
+        content_encoder=FakeContentEncoder(),
+        target=TARGETS["spectral_flux"],
+        manifest_path=manifest,
+        smile_root=smile_root,
+    )
+
+    assert [row.utt_id for row in dataset.base_dataset.rows] == [
+        "picnic/1234",
+        "rainbow/5678",
+    ]
+    assert [row.split for row in dataset.base_dataset.rows] == ["picnic", "rainbow"]
+    assert dataset.smile_features.smile_root == smile_root
