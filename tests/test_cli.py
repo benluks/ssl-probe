@@ -91,12 +91,8 @@ def test_train_rejects_ambiguous_or_incomplete_data_sources(
 def test_manifest_feature_root_is_not_split_twice() -> None:
     smile_root = Path("features/opensmile/clac")
 
-    assert (
-        resolve_split_smile_root(smile_root, "picnic", Path("train.csv")) == smile_root
-    )
-    assert resolve_split_smile_root(smile_root, "dev-clean", None) == (
-        smile_root / "dev-clean"
-    )
+    assert resolve_split_smile_root(smile_root, "picnic", Path("train.csv")) == smile_root
+    assert resolve_split_smile_root(smile_root, "dev-clean", None) == (smile_root / "dev-clean")
 
 
 def test_train_run_name_has_no_implicit_conversion() -> None:

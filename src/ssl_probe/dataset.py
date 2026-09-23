@@ -105,9 +105,7 @@ class FrameDataset(IterableDataset):
         self.preserve_layers = preserve_layers
         self.target = target
         if self.target.transform_kwargs is not None and speaker_stats is None:
-            raise ValueError(
-                f"Target {self.target.name!r} requires speaker statistics."
-            )
+            raise ValueError(f"Target {self.target.name!r} requires speaker statistics.")
 
         self.context_size = context_size
         self.context_radius = context_size // 2
@@ -137,8 +135,7 @@ class FrameDataset(IterableDataset):
             stats = json.loads(Path(speaker_stats).read_text())
 
             self.stores["speaker_stats"] = {
-                spk_id: values["mean_log_f0"]
-                for spk_id, values in stats["speakers"].items()
+                spk_id: values["mean_log_f0"] for spk_id, values in stats["speakers"].items()
             }
 
         self.smile_features = SmileParquetStore(
@@ -152,8 +149,7 @@ class FrameDataset(IterableDataset):
         self.shuffle = shuffle
 
         self.frame_lengths = [
-            self._estimate_reference_frames(sample.path)
-            for sample in self.base_dataset.rows
+            self._estimate_reference_frames(sample.path) for sample in self.base_dataset.rows
         ]
 
     @property
@@ -184,9 +180,7 @@ class FrameDataset(IterableDataset):
             count += values.numel()
 
         if count == 0:
-            raise ValueError(
-                f"Target {self.target.name!r} has no valid training frames."
-            )
+            raise ValueError(f"Target {self.target.name!r} has no valid training frames.")
 
         mean = total / count
         variance = max(total_squared / count - mean**2, 0.0)
@@ -236,13 +230,9 @@ class FrameDataset(IterableDataset):
         if output_frames == 0:
             return raw_target[:0]
         if raw_target.shape[0] == 0:
-            raise ValueError(
-                "Cannot align an empty target sequence to non-empty encoder output."
-            )
+            raise ValueError("Cannot align an empty target sequence to non-empty encoder output.")
 
-        content_times = (
-            torch.arange(output_frames, dtype=torch.float64) / content_frame_hz
-        )
+        content_times = torch.arange(output_frames, dtype=torch.float64) / content_frame_hz
         indices = torch.floor(content_times * target_frame_hz).to(dtype=torch.long)
         indices = indices[indices < raw_target.shape[0]]
         return raw_target[indices]

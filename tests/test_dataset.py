@@ -2,9 +2,9 @@ import json
 
 import pytest
 import torch
+from ssl_probe.targets import TARGETS, SmileParquetStore
 
 from ssl_probe.dataset import FrameDataset
-from ssl_probe.targets import TARGETS, SmileParquetStore
 
 
 class FakeContentEncoder:
@@ -128,9 +128,7 @@ def test_smile_store_defaults_existing_outputs_to_100_hz(tmp_path) -> None:
     assert store.frame_hz == 100.0
 
 
-def test_frame_dataset_accepts_split_qualified_manifest_ids(
-    tmp_path, monkeypatch
-) -> None:
+def test_frame_dataset_accepts_split_qualified_manifest_ids(tmp_path, monkeypatch) -> None:
     manifest = tmp_path / "train.csv"
     manifest.write_text(
         "utt_id,path,split,spkid\n"
@@ -138,9 +136,7 @@ def test_frame_dataset_accepts_split_qualified_manifest_ids(
         "rainbow/5678,/audio/rainbow/5678.wav,rainbow,5678\n"
     )
     smile_root = tmp_path / "features" / "opensmile" / "clac"
-    monkeypatch.setattr(
-        FrameDataset, "_estimate_reference_frames", lambda self, path: 10
-    )
+    monkeypatch.setattr(FrameDataset, "_estimate_reference_frames", lambda self, path: 10)
 
     dataset = FrameDataset(
         content_encoder=FakeContentEncoder(),

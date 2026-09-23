@@ -128,15 +128,11 @@ def parse_args(argv: list[str] | None = None):
     using_manifests = args.train_manifest is not None or args.val_manifest is not None
     if using_manifests:
         if args.train_manifest is None or args.val_manifest is None:
-            parser.error(
-                "--train-manifest and --val-manifest must be provided together"
-            )
+            parser.error("--train-manifest and --val-manifest must be provided together")
         if args.root is not None:
             parser.error("--root cannot be combined with manifest-backed training")
     elif args.root is None:
-        parser.error(
-            "--root is required unless train and validation manifests are provided"
-        )
+        parser.error("--root is required unless train and validation manifests are provided")
     return args
 
 
@@ -309,9 +305,7 @@ def main():
                 ModelCheckpoint(monitor="val/loss", mode="min", save_last=False),
                 LearningRateMonitor(logging_interval="step"),
             ],
-            "logger": WandbLogger(
-                name=str(run_name), save_dir=out_dir, project="ssl-probe"
-            ),
+            "logger": WandbLogger(name=str(run_name), save_dir=out_dir, project="ssl-probe"),
         },
     )
 
@@ -325,9 +319,7 @@ def main():
 
     if target_standardization is not None:
         stats_path = run_dir / "target_standardization.json"
-        stats_path.write_text(
-            json.dumps(asdict(target_standardization), indent=2) + "\n"
-        )
+        stats_path.write_text(json.dumps(asdict(target_standardization), indent=2) + "\n")
 
     trainer.pl_trainer.logger.log_hyperparams(config)
     pipeline.run()
