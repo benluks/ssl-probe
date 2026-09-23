@@ -2,9 +2,9 @@ import json
 
 import pytest
 import torch
-from ssl_probe.targets import TARGETS, SmileParquetStore
 
 from ssl_probe.dataset import FrameDataset
+from ssl_probe.targets import TARGETS, SmileParquetStore
 
 
 class FakeContentEncoder:
