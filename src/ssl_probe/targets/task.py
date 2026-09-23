@@ -5,10 +5,12 @@ import torch
 import torch.nn.functional as F
 from quick_convert.utils import DeviceLike
 from torchmetrics import (
+    ConcordanceCorrCoef,
     MeanAbsoluteError,
     MeanSquaredError,
     Metric,
     MetricCollection,
+    PearsonCorrCoef,
     R2Score,
 )
 from torchmetrics.classification import (
@@ -43,22 +45,56 @@ class ProbeTask(ABC):
     def make_metrics(self) -> MetricCollection: ...
 
 
+@dataclass(frozen=True)
+class TargetStandardization:
+    mean: float
+    std: float
+    count: int
+
+    def __post_init__(self) -> None:
+        if not torch.isfinite(torch.tensor(self.mean)):
+            raise ValueError("Target mean must be finite.")
+        if not torch.isfinite(torch.tensor(self.std)) or self.std <= 0:
+            raise ValueError("Target standard deviation must be finite and positive.")
+        if self.count <= 0:
+            raise ValueError("Target standardization count must be positive.")
+
+    def normalize(self, values: torch.Tensor) -> torch.Tensor:
+        return (values - self.mean) / self.std
+
+    def denormalize(self, values: torch.Tensor) -> torch.Tensor:
+        return values * self.std + self.mean
+
+
 class RegressionTask(ProbeTask):
     output_dim = 1
+
+    def __init__(self, standardization: TargetStandardization | None = None) -> None:
+        self.standardization = standardization
+
+    def with_standardization(self, standardization: TargetStandardization) -> "RegressionTask":
+        return RegressionTask(standardization=standardization)
 
     def compute(
         self,
         output: torch.Tensor,
         target: torch.Tensor,
     ) -> TaskOutput:
-        prediction = output.squeeze(-1)
-        target = target.squeeze(-1)
+        model_output = output.squeeze(-1)
+        raw_target = target.squeeze(-1)
+
+        if self.standardization is None:
+            loss_target = raw_target
+            prediction = model_output
+        else:
+            loss_target = self.standardization.normalize(raw_target)
+            prediction = self.standardization.denormalize(model_output)
 
         return TaskOutput(
-            loss=F.mse_loss(prediction, target),
+            loss=F.mse_loss(model_output, loss_target),
             prediction=prediction,
             metric_input=prediction,
-            metric_target=target,
+            metric_target=raw_target,
         )
 
     def make_metrics(self) -> MetricCollection:
@@ -68,6 +104,8 @@ class RegressionTask(ProbeTask):
                 "mse": MeanSquaredError(),
                 "rmse": MeanSquaredError(squared=False),
                 "r2": R2Score(),
+                "pearson": PearsonCorrCoef(),
+                "ccc": ConcordanceCorrCoef(),
             }
         )
 

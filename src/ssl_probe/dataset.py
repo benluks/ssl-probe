@@ -18,8 +18,9 @@ from quick_convert.data.resources import (
     TemplateResourceProvider,
 )
 from torch.utils.data import DataLoader, IterableDataset, Sampler
+from tqdm import tqdm
 
-from .targets import FrameTarget, SmileParquetStore
+from .targets import FrameTarget, SmileParquetStore, TargetStandardization
 
 warnings.filterwarnings(
     "ignore",
@@ -147,6 +148,41 @@ class FrameDataset(IterableDataset):
     @property
     def feature_dim(self) -> int:
         return self.content_encoder.feature_dim
+
+    def compute_target_standardization(self) -> TargetStandardization:
+        """Compute transformed-target moments from valid training frames only."""
+        total = 0.0
+        total_squared = 0.0
+        count = 0
+
+        for sample in tqdm(
+            self.base_dataset.rows,
+            desc=f"target stats ({self.target.name})",
+        ):
+            raw_target = self.smile_features[sample.utt_id]
+            kwargs = (
+                self.target.transform_kwargs(sample, self.stores)
+                if self.target.transform_kwargs is not None
+                else {}
+            )
+            values, valid = self.target.apply(raw_target, **kwargs)
+            values = values[valid].double()
+
+            total += values.sum().item()
+            total_squared += values.square().sum().item()
+            count += values.numel()
+
+        if count == 0:
+            raise ValueError(f"Target {self.target.name!r} has no valid training frames.")
+
+        mean = total / count
+        variance = max(total_squared / count - mean**2, 0.0)
+        std = math.sqrt(variance)
+
+        if std == 0:
+            raise ValueError(f"Target {self.target.name!r} has zero training variance.")
+
+        return TargetStandardization(mean=mean, std=std, count=count)
 
     def _encoder_sample_rate(self) -> int:
         sample_rate = getattr(self.content_encoder, "sample_rate", None)

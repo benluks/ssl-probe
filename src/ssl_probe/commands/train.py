@@ -1,5 +1,6 @@
 import argparse
 import json
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import lightning as L
@@ -13,7 +14,7 @@ from quick_convert.training.lightning.trainer import LightningTrainer
 from ..dataset import FrameDataset
 from ..encoders import build_content_encoder, build_layer_fusion, content_encoder_slug
 from ..probe import Probe
-from ..targets import TARGETS
+from ..targets import TARGETS, RegressionTask
 from ..training import ProbeTrainingModule
 
 
@@ -65,6 +66,15 @@ def parse_args(argv: list[str] | None = None):
 
     parser.add_argument("--frame-batch-size", type=int, default=8192)
     parser.add_argument("--hidden-dim", type=int, nargs="+", default=[])
+    parser.add_argument(
+        "--target-normalization",
+        choices=["none", "standardize"],
+        default="none",
+        help=(
+            "Standardize regression loss targets with moments computed from valid training frames. "
+            "Metrics remain on the target's transformed, unstandardized scale."
+        ),
+    )
 
     parser.add_argument(
         "--nonlinearity",
@@ -163,6 +173,21 @@ def main():
         preserve_layers=layer_fusion is not None,
     )
 
+    target_standardization = None
+    if args.target_normalization == "standardize":
+        if not isinstance(target.task, RegressionTask):
+            raise ValueError(
+                "--target-normalization standardize is only valid for regression targets."
+            )
+
+        target_standardization = train_dataset.compute_target_standardization()
+        target = replace(
+            target,
+            task=target.task.with_standardization(target_standardization),
+        )
+        train_dataset.target = target
+        config["target_standardization"] = asdict(target_standardization)
+
     val_dataset = (
         None
         if args.val_split is None
@@ -251,6 +276,11 @@ def main():
         out_dir=out_dir,
     )
     run_dir = pipeline.prepare()
+
+    if target_standardization is not None:
+        stats_path = run_dir / "target_standardization.json"
+        stats_path.write_text(json.dumps(asdict(target_standardization), indent=2) + "\n")
+
     trainer.pl_trainer.logger.log_hyperparams(config)
     pipeline.run()
 
