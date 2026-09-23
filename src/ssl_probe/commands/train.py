@@ -176,7 +176,9 @@ def main():
     target_standardization = None
     if args.target_normalization == "standardize":
         if not isinstance(target.task, RegressionTask):
-            raise ValueError(\n                "--target-normalization standardize is only valid for regression targets."\n            )
+            raise ValueError(
+                "--target-normalization standardize is only valid for regression targets."
+            )
 
         target_standardization = train_dataset.compute_target_standardization()
         target = replace(
