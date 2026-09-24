@@ -172,6 +172,12 @@ def build_run_name(
     return Path(target) / "_".join(component for component in components if component)
 
 
+def write_json_artifact(path: Path, payload: dict[str, object]) -> None:
+    """Write a run artifact even when the prepared run directory is still absent."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n")
+
+
 def main():
     args = parse_args()
     args.smile_root = resolve_smile_root(args.dataset, args.smile_root)
@@ -317,14 +323,13 @@ def main():
     )
     run_dir = pipeline.prepare()
 
-    if target_standardization is not None:
-        stats_path = run_dir / "target_standardization.json"
-        stats_path.write_text(json.dumps(asdict(target_standardization), indent=2) + "\n")
-
     trainer.pl_trainer.logger.log_hyperparams(config)
     pipeline.run()
 
     if trainer.pl_trainer.is_global_zero:
+        if target_standardization is not None:
+            stats_path = run_dir / "target_standardization.json"
+            write_json_artifact(stats_path, asdict(target_standardization))
         module.export_layer_weights(run_dir / "layer_weights.json")
 
 
