@@ -11,6 +11,7 @@ from ssl_probe.commands.train import (
     parse_args,
     resolve_smile_root,
     resolve_split_smile_root,
+    write_json_artifact,
 )
 
 
@@ -119,3 +120,11 @@ def test_train_run_name_accepts_explicit_experiment_label() -> None:
     )
 
     assert run_name == Path("logf0/knnvc-original_librispeech_wavlm-l6_gelu_c1")
+
+
+def test_write_json_artifact_creates_prepared_run_directory(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "ssl-probe" / "run-id" / "target_standardization.json"
+
+    write_json_artifact(artifact_path, {"mean": 1.25, "std": 0.5})
+
+    assert artifact_path.read_text() == '{\n  "mean": 1.25,\n  "std": 0.5\n}\n'
