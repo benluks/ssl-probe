@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
 
 import opensmile
@@ -13,13 +14,20 @@ from tqdm import tqdm
 from ..opensmile import OPENSMILE_LLD_FRAME_HZ, init_opensmile
 from ..paths import dataset_utt_id_overrides, utterance_relative_path
 
+logger = logging.getLogger(__name__)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--root", required=True)
     parser.add_argument("--dataset", default=None)
-    parser.add_argument("--splits", nargs="+", required=True)
+    parser.add_argument(
+        "--splits",
+        nargs="+",
+        default=None,
+        help="Splits to process. Defaults to all split directories found under --root.",
+    )
     parser.add_argument(
         "--out-root",
         default="features/opensmile",
@@ -34,15 +42,49 @@ def parse_args():
     return parser.parse_args()
 
 
+def find_splits(root: str | Path) -> list[str]:
+    """Return the names of split directories available under ``root``."""
+    root = Path(root)
+    if not root.is_dir():
+        raise ValueError(f"dataset root is not a directory: {root}")
+
+    splits = sorted(path.name for path in root.iterdir() if path.is_dir())
+    if not splits:
+        raise ValueError(f"no split directories found under dataset root: {root}")
+    return splits
+
+
+def resolve_splits(root: str | Path, requested: list[str] | None) -> list[str]:
+    available = find_splits(root)
+    if requested is None:
+        logger.info("Discovered %d splits under %s: %s", len(available), root, ", ".join(available))
+        return available
+
+    available_set = set(available)
+    missing = [split for split in requested if split not in available_set]
+    if missing:
+        logger.warning(
+            "Skipping requested splits not present under %s: %s",
+            root,
+            ", ".join(missing),
+        )
+
+    splits = [split for split in requested if split in available_set]
+    if not splits:
+        raise ValueError(f"none of the requested splits are present under dataset root: {root}")
+    return splits
+
+
 def main():
     args = parse_args()
+    splits = resolve_splits(args.root, args.splits)
 
     dataset_kwargs = dataset_utt_id_overrides(args.dataset, args.utt_id_template)
 
     dataset = load_dataset(
         name=args.dataset,
         root=args.root,
-        splits=args.splits,
+        splits=splits,
         load=["audio"],
         **dataset_kwargs,
     )
@@ -60,7 +102,7 @@ def main():
         raise ValueError("you must set a dataset name in --dataset or pass --out-folder")
 
     out_dir = Path(args.out_root) / out_folder
-    for split in args.splits:
+    for split in splits:
         split_dir = out_dir / split
         split_dir.mkdir(parents=True, exist_ok=True)
 
@@ -73,7 +115,7 @@ def main():
 
         (split_dir / "_metadata.json").write_text(json.dumps(metadata, indent=2))
 
-    for sample in tqdm(dataset, desc="+".join(args.splits)):
+    for sample in tqdm(dataset, desc="+".join(splits)):
         relative_path = utterance_relative_path(sample.utt_id, sample.split)
         out_path = out_dir / relative_path.parent / f"{relative_path.name}.parquet"
 
