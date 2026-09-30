@@ -75,6 +75,12 @@ def parse_args(argv: list[str] | None = None):
     )
 
     parser.add_argument("--frame-batch-size", type=int, default=8192)
+    parser.add_argument(
+        "--inference-frame-budget",
+        type=int,
+        default=None,
+        help="Audio inference batch budget in encoder frames; defaults to 10 times frame batch size.",
+    )
     parser.add_argument("--hidden-dim", type=int, nargs="+", default=[])
     parser.add_argument(
         "--target-normalization",
@@ -125,6 +131,8 @@ def parse_args(argv: list[str] | None = None):
     )
 
     args = parser.parse_args(argv)
+    if args.inference_frame_budget is not None and args.inference_frame_budget <= 0:
+        parser.error("--inference-frame-budget must be positive")
     using_manifests = args.train_manifest is not None or args.val_manifest is not None
     if using_manifests:
         if args.train_manifest is None or args.val_manifest is None:
@@ -210,7 +218,7 @@ def main():
         target=target,
         context_size=args.context_size,
         frame_batch_size=args.frame_batch_size,
-        inference_frame_budget=10 * args.frame_batch_size,
+        inference_frame_budget=(args.inference_frame_budget or 10 * args.frame_batch_size),
         preserve_layers=layer_fusion is not None,
     )
 
@@ -248,7 +256,7 @@ def main():
             target=target,
             context_size=args.context_size,
             frame_batch_size=args.frame_batch_size,
-            inference_frame_budget=10 * args.frame_batch_size,
+            inference_frame_budget=(args.inference_frame_budget or 10 * args.frame_batch_size),
             shuffle=False,
             preserve_layers=layer_fusion is not None,
         )

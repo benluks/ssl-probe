@@ -4,10 +4,14 @@ set -euo pipefail
 # Run one of the 56 encoder/target combinations. Task IDs 0-27 use
 # W2V-BERT; task IDs 28-55 use S3Tokenizer.
 
+task_count=56
+if [[ -n "${SWEEP_ENCODER:-}" ]]; then
+    task_count=28
+fi
 task_id="${1:-}"
-if [[ ! "${task_id}" =~ ^[0-9]+$ ]] || (( task_id < 0 || task_id >= 56 )); then
+if [[ ! "${task_id}" =~ ^[0-9]+$ ]] || (( task_id < 0 || task_id >= task_count )); then
     echo "usage: $0 TASK_ID" >&2
-    echo "TASK_ID must be an integer from 0 through 55" >&2
+    echo "TASK_ID must be an integer from 0 through $((task_count - 1))" >&2
     exit 2
 fi
 
@@ -59,6 +63,22 @@ case "${encoder_index}" in
         ;;
 esac
 
+# An explicit encoder sweeps the same 28 targets without changing legacy IDs.
+layer_fusion=weighted-sum
+if [[ -n "${SWEEP_ENCODER:-}" ]]; then
+    encoder="${SWEEP_ENCODER}"
+    encoder_label="${ENCODER_LABEL:-${encoder}}"
+    case "${encoder}" in
+        spear) encoder_kwargs='{"layer":null}' ;;
+        pase|paseplus) encoder_kwargs='{}'; layer_fusion=none ;;
+        emotion2vec|emo2vec) encoder_kwargs='{"layer":-1,"granularity":"frame"}'; layer_fusion=none ;;
+        s3tokenizer) encoder_kwargs='{"representation":"encoder","layer":-1}' ;;
+        w2vbert) encoder_kwargs='{}' ;;
+        *) echo "unsupported sweep encoder: ${encoder}" >&2; exit 2 ;;
+    esac
+    encoder_args=(--encoder-kwargs "${ENCODER_KWARGS:-${encoder_kwargs}}")
+fi
+
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_root="${PROJECT_ROOT:-$(cd -- "${script_dir}/.." && pwd)}"
 probe_bin="${SSL_PROBE_BIN:-${project_root}/.venv/bin/ssl-probe}"
@@ -69,8 +89,8 @@ out_dir="${out_root}/${encoder_label}/${target}"
 completion_marker="${out_dir}/.complete"
 
 if [[ -f "${completion_marker}" && "${FORCE:-0}" != "1" ]]; then
-    printf 'skip task %d/55: encoder=%s target=%s (already complete)\n' \
-        "${task_id}" "${encoder}" "${target}"
+    printf 'skip task %d/%d: encoder=%s target=%s (already complete)\n' \
+        "${task_id}" "$((task_count - 1))" "${encoder}" "${target}"
     exit 0
 fi
 
@@ -94,24 +114,25 @@ command=(
     --smile-root "${smile_root}"
     --encoder "${encoder}"
     "${encoder_args[@]}"
-    --layer-fusion weighted-sum
+    --layer-fusion "${layer_fusion}"
     --layer-log-interval "${LAYER_LOG_INTERVAL:-1000}"
     --target "${target}"
     "${normalization_args[@]}"
     --context-size "${CONTEXT_SIZE:-3}"
     --hidden-dim "${HIDDEN_DIM:-512}"
     --frame-batch-size "${FRAME_BATCH_SIZE:-256}"
+    --inference-frame-budget "${INFERENCE_FRAME_BUDGET:-$((10 * ${FRAME_BATCH_SIZE:-256}))}"
     --lr "${LEARNING_RATE:-0.001}"
     --weight-decay "${WEIGHT_DECAY:-0.0001}"
     --warmup "${WARMUP:-0.05}"
     --max-steps "${MAX_STEPS:-10000}"
     --val-check-interval "${VAL_CHECK_INTERVAL:-2000}"
     --seed "${SEED:-115}"
-    --experiment-label weighted-sum
+    --experiment-label "${layer_fusion}"
     --out-dir "${out_dir}"
 )
 
-printf 'run task %d/55: encoder=%s target=%s\n' "${task_id}" "${encoder}" "${target}"
+printf 'run task %d/%d: encoder=%s target=%s\n' "${task_id}" "$((task_count - 1))" "${encoder}" "${target}"
 printf 'command:'
 printf ' %q' "${command[@]}"
 printf '\n'

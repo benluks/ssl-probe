@@ -128,3 +128,15 @@ def test_write_json_artifact_creates_prepared_run_directory(tmp_path: Path) -> N
     write_json_artifact(artifact_path, {"mean": 1.25, "std": 0.5})
 
     assert artifact_path.read_text() == '{\n  "mean": 1.25,\n  "std": 0.5\n}\n'
+
+
+@pytest.mark.parametrize("budget", ["0", "-1"])
+def test_train_rejects_nonpositive_inference_budget(budget):
+    with pytest.raises(SystemExit):
+        parse_args(["--root", "/audio", "--inference-frame-budget", budget])
+
+
+def test_train_accepts_independent_inference_budget():
+    args = parse_args(["--root", "/audio", "--inference-frame-budget", "300"])
+    assert args.inference_frame_budget == 300
+    assert args.frame_batch_size == 8192
