@@ -223,3 +223,63 @@ checkpoint between runs.
 
 The package uses a `src/` layout; importable code lives under `src/ssl_probe/`.
 
+
+### Sweep the acoustic encoders
+
+The same 28 LibriSpeech targets can be run for a selected encoder with
+`SWEEP_ENCODER`. With this variable set, IDs 0–27 select targets for that
+encoder. Without it, the original 56-task W2V-BERT/S3Tokenizer sweep is unchanged.
+SPEAR uses all layers and a learned weighted sum; PASE+ and emotion2vec use
+final frame representations with no layer fusion. `ENCODER_KWARGS` is JSON
+passed directly to the Quick Convert constructor (it replaces the preset).
+Use a distinct `ENCODER_LABEL` when comparing checkpoint variants so their
+completion markers and outputs do not overlap.
+
+Install the Quick Convert version containing the new adapters first (PR #43
+in benluks/quick-convert; until merged, use its feature/acoustic-content-encoders
+branch). In the ssl-probe environment, install the corresponding optional extra,
+for example:
+
+```bash
+uv pip install --python .venv/bin/python 'quick-convert[spear] @ git+https://github.com/benluks/quick-convert.git@feature/acoustic-content-encoders'
+```
+
+Use `[emotion2vec]` or `[pase]` for those backends. The published PASE+ config
+also requires upstream torchqrnn/CuPy compatible with your CUDA installation;
+the extra does not install those legacy dependencies. Obtain `PASE+.cfg` and
+`FE_e199.ckpt` from the official santi-pdp/pase release. Keep the config unchanged
+so it matches the trained architecture. VoiceFM and CARE are omitted.
+
+Preview commands before running:
+
+```bash
+SWEEP_ENCODER=spear DRY_RUN=1 scripts/run_librispeech_weighted_sum_sweep.sh 0
+```
+
+Run SPEAR (automatically downloads its model and remote Python implementation):
+
+```bash
+SWEEP_ENCODER=spear INFERENCE_FRAME_BUDGET=300 \
+  scripts/run_librispeech_weighted_sum_sweep.sh
+```
+
+The budget counts encoder frames and controls audio extraction separately from
+`FRAME_BATCH_SIZE`, which controls probe training. All-layer SPEAR extraction
+can use substantial GPU memory. Lowering the budget reduces batching, but a
+single long utterance may exceed it. Start with one target at `MAX_STEPS=100`
+and `VAL_CHECK_INTERVAL=50` before running the full sweep. Set a separate
+`OUT_ROOT` for that smoke run so its completion marker does not skip the
+full training job.
+
+```bash
+SWEEP_ENCODER=emotion2vec scripts/run_librispeech_weighted_sum_sweep.sh
+
+SWEEP_ENCODER=paseplus \
+ENCODER_KWARGS='{"config_path":"/absolute/path/PASE+.cfg","checkpoint_path":"/absolute/path/FE_e199.ckpt"}' \
+  scripts/run_librispeech_weighted_sum_sweep.sh
+```
+
+Existing `LIBRISPEECH_ROOT`, `SMILE_ROOT`, optimizer, seed, output, and restart
+controls still apply. Targets are aligned using the selected encoder's frame
+rate; the OpenSMILE feature store can be reused. Check W&B's `layer_fusion` when
+comparing final-representation runs against weighted-sum runs.

@@ -12,12 +12,16 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_root="${PROJECT_ROOT:-$(cd -- "${script_dir}/.." && pwd)}"
 task_script="${script_dir}/run_librispeech_weighted_sum_task.sh"
-log_root="${LOG_ROOT:-${project_root}/logs/librispeech_weighted_sum}"
+log_root="${LOG_ROOT:-${project_root}/logs/librispeech_weighted_sum/${ENCODER_LABEL:-${SWEEP_ENCODER:-legacy}}}"
 
 if (( $# > 0 )); then
     task_ids=("$@")
 else
-    task_ids=({0..55})
+    if [[ -n "${SWEEP_ENCODER:-}" ]]; then
+        task_ids=({0..27})
+    else
+        task_ids=({0..55})
+    fi
 fi
 
 mkdir -p "${log_root}"
