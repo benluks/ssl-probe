@@ -11,8 +11,12 @@ TASK = Path(__file__).resolve().parents[1] / "scripts/run_librispeech_weighted_s
     ("encoder", "fusion", "kwargs"),
     [
         ("spear", "weighted-sum", '{"layer":null}'),
-        ("emotion2vec", "none", '{"layer":-1,"granularity":"frame"}'),
-        ("paseplus", "none", '{"config_path":"a.cfg","checkpoint_path":"b.ckpt"}'),
+        ("emotion2vec", "weighted-sum", '{"layer":null,"granularity":"frame"}'),
+        (
+            "paseplus",
+            "weighted-sum",
+            '{"config_path":"a.cfg","checkpoint_path":"b.ckpt","layer":null}',
+        ),
     ],
 )
 def test_selected_sweep_constructor_and_fusion(tmp_path, encoder, fusion, kwargs):

@@ -70,8 +70,8 @@ if [[ -n "${SWEEP_ENCODER:-}" ]]; then
     encoder_label="${ENCODER_LABEL:-${encoder}}"
     case "${encoder}" in
         spear) encoder_kwargs='{"layer":null}' ;;
-        pase|paseplus) encoder_kwargs='{}'; layer_fusion=none ;;
-        emotion2vec|emo2vec) encoder_kwargs='{"layer":-1,"granularity":"frame"}'; layer_fusion=none ;;
+        pase|paseplus) encoder_kwargs='{"layer":null}'; encoder_label="${ENCODER_LABEL:-${encoder}-wsum}" ;;
+        emotion2vec|emo2vec) encoder_kwargs='{"layer":null,"granularity":"frame"}'; encoder_label="${ENCODER_LABEL:-${encoder}-wsum}" ;;
         s3tokenizer) encoder_kwargs='{"representation":"encoder","layer":-1}' ;;
         w2vbert) encoder_kwargs='{}' ;;
         *) echo "unsupported sweep encoder: ${encoder}" >&2; exit 2 ;;
