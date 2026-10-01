@@ -229,8 +229,12 @@ The package uses a `src/` layout; importable code lives under `src/ssl_probe/`.
 The same 28 LibriSpeech targets can be run for a selected encoder with
 `SWEEP_ENCODER`. With this variable set, IDs 0–27 select targets for that
 encoder. Without it, the original 56-task W2V-BERT/S3Tokenizer sweep is unchanged.
-SPEAR uses all layers and a learned weighted sum; PASE+ and emotion2vec use
-final frame representations with no layer fusion. `ENCODER_KWARGS` is JSON
+SPEAR and emotion2vec use transformer block states with a learned weighted sum.
+PASE+ uses its pretrained projected CNN skip stages plus the final aggregate
+frontend output, aligned by the upstream crop/mean operation. No new projection
+parameters are trained. This is a multistage CNN fusion rather than a transformer
+layer sum. All three presets use weighted-sum fusion. Emotion2vec/PASE+ output
+labels have a `-wsum` suffix to keep earlier final-only completion markers separate. `ENCODER_KWARGS` is JSON
 passed directly to the Quick Convert constructor (it replaces the preset).
 Use a distinct `ENCODER_LABEL` when comparing checkpoint variants so their
 completion markers and outputs do not overlap.
@@ -275,11 +279,12 @@ full training job.
 SWEEP_ENCODER=emotion2vec scripts/run_librispeech_weighted_sum_sweep.sh
 
 SWEEP_ENCODER=paseplus \
-ENCODER_KWARGS='{"config_path":"/absolute/path/PASE+.cfg","checkpoint_path":"/absolute/path/FE_e199.ckpt"}' \
+ENCODER_KWARGS='{"config_path":"/absolute/path/PASE+.cfg","checkpoint_path":"/absolute/path/FE_e199.ckpt","layer":null}' \
   scripts/run_librispeech_weighted_sum_sweep.sh
 ```
 
 Existing `LIBRISPEECH_ROOT`, `SMILE_ROOT`, optimizer, seed, output, and restart
 controls still apply. Targets are aligned using the selected encoder's frame
 rate; the OpenSMILE feature store can be reused. Check W&B's `layer_fusion` when
-comparing final-representation runs against weighted-sum runs.
+comparing earlier final-representation runs against weighted-sum runs.
+If overriding `ENCODER_KWARGS`, include `"layer":null` for these all-layer presets.
