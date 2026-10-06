@@ -288,3 +288,29 @@ controls still apply. Targets are aligned using the selected encoder's frame
 rate; the OpenSMILE feature store can be reused. Check W&B's `layer_fusion` when
 comparing earlier final-representation runs against weighted-sum runs.
 If overriding `ENCODER_KWARGS`, include `"layer":null` for these all-layer presets.
+
+### Jitter period-count experiments
+
+Extract separate eGeMAPSv02 stores with a different minimum period count:
+
+```bash
+ssl-probe precompute opensmile \
+  --root /cfs/collections/librispeech/LibriSpeech \
+  --dataset librispeech --splits train-clean-100 dev-clean \
+  --jitter-min-periods 4 --out-folder librispeech_jitter_p4
+
+SMILE_ROOT="$PWD/features/opensmile/librispeech_jitter_p4" \
+OUT_ROOT="$PWD/outputs/sweeps/jitter_p4" \
+  scripts/run_librispeech_weighted_sum_task.sh 11
+```
+
+Use 3 instead of 4 (and `p3` in both paths) for the three-period experiment.
+Task 11 probes W2V-BERT jitter; task 39 probes S3Tokenizer jitter. The default
+remains two periods. This is a minimum cycle count, not a fixed-duration window;
+the pitch window (60 ms), hop (10 ms), and smoothing remain unchanged. Shimmer
+uses the same component and is affected too. Low-pitched frames can hit the
+pitch-window limit, so compare valid-frame coverage alongside probe scores.
+
+Extraction metadata records the period count. Conflicting settings in an
+existing store are rejected; fallback extraction uses the recorded setting.
+Legacy metadata without a period count is interpreted as the default of two.

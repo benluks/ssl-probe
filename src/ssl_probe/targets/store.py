@@ -34,7 +34,7 @@ class SmileParquetStore:
 
     @cached_property
     def smile(self):
-        return init_opensmile()
+        return init_opensmile(jitter_min_periods=self.metadata.get("jitter_min_periods", 2))
 
     def _find_audio_path(self, utt_id: str) -> Path | None:
         if self.audio_root is None:

@@ -10,11 +10,11 @@ import opensmile
 from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
-from ..opensmile import OPENSMILE_LLD_FRAME_HZ, init_opensmile
+from ..opensmile import OPENSMILE_LLD_FRAME_HZ, init_opensmile, validate_jitter_min_periods
 from ..paths import dataset_utt_id_overrides, utterance_relative_path
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--root", required=True)
@@ -31,7 +31,18 @@ def parse_args():
         help="Optional override. Named datasets use their Quick Convert template.",
     )
 
-    return parser.parse_args()
+    parser.add_argument(
+        "--jitter-min-periods",
+        type=int,
+        default=2,
+        help="Minimum pitch periods for jitter/shimmer (>=2; default: 2).",
+    )
+    args = parser.parse_args(argv)
+    try:
+        validate_jitter_min_periods(args.jitter_min_periods)
+    except ValueError as error:
+        parser.error(str(error))
+    return args
 
 
 def main():
@@ -53,6 +64,7 @@ def main():
     smile = init_opensmile(
         feature_set=feature_set,
         feature_level=feature_level,
+        jitter_min_periods=args.jitter_min_periods,
     )
 
     out_folder = args.out_folder or args.dataset
@@ -68,10 +80,33 @@ def main():
             "feature_set": feature_set.name,
             "feature_level": feature_level.name,
             "frame_hz": OPENSMILE_LLD_FRAME_HZ,
+            "jitter_min_periods": args.jitter_min_periods,
             "split": split,
         }
 
-        (split_dir / "_metadata.json").write_text(json.dumps(metadata, indent=2))
+        metadata_path = split_dir / "_metadata.json"
+        if metadata_path.exists():
+            previous = json.loads(metadata_path.read_text())
+            previous.setdefault("jitter_min_periods", 2)
+            if previous != metadata:
+                raise ValueError(
+                    f"Extraction settings conflict at {metadata_path}; use a new folder."
+                )
+        elif any(split_dir.rglob("*.parquet")):
+            raise ValueError(
+                f"Existing features have no metadata at {split_dir}; use a new folder."
+            )
+
+    # Validate every split before updating any metadata.
+    for split in args.splits:
+        metadata = {
+            "feature_set": feature_set.name,
+            "feature_level": feature_level.name,
+            "frame_hz": OPENSMILE_LLD_FRAME_HZ,
+            "jitter_min_periods": args.jitter_min_periods,
+            "split": split,
+        }
+        (out_dir / split / "_metadata.json").write_text(json.dumps(metadata, indent=2))
 
     for sample in tqdm(dataset, desc="+".join(args.splits)):
         relative_path = utterance_relative_path(sample.utt_id, sample.split)
