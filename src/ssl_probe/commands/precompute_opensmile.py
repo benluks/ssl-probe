@@ -32,7 +32,9 @@ def parse_args(argv=None):
     )
 
     parser.add_argument(
-        "--jitter-min-periods", type=int, default=2,
+        "--jitter-min-periods",
+        type=int,
+        default=2,
         help="Minimum pitch periods for jitter/shimmer (>=2; default: 2).",
     )
     args = parser.parse_args(argv)
@@ -87,9 +89,13 @@ def main():
             previous = json.loads(metadata_path.read_text())
             previous.setdefault("jitter_min_periods", 2)
             if previous != metadata:
-                raise ValueError(f"Extraction settings conflict at {metadata_path}; use a new folder.")
+                raise ValueError(
+                    f"Extraction settings conflict at {metadata_path}; use a new folder."
+                )
         elif any(split_dir.rglob("*.parquet")):
-            raise ValueError(f"Existing features have no metadata at {split_dir}; use a new folder.")
+            raise ValueError(
+                f"Existing features have no metadata at {split_dir}; use a new folder."
+            )
 
     # Validate every split before updating any metadata.
     for split in args.splits:
