@@ -19,7 +19,12 @@ def parse_args(argv=None):
 
     parser.add_argument("--root", required=True)
     parser.add_argument("--dataset", default=None)
-    parser.add_argument("--splits", nargs="+", required=True)
+    parser.add_argument(
+        "--splits",
+        nargs="+",
+        default=None,
+        help="Splits to process. Omit to use Quick Convert dataset defaults or scan a generic root.",
+    )
     parser.add_argument(
         "--out-root",
         default="features/opensmile",
@@ -58,6 +63,10 @@ def main():
         **dataset_kwargs,
     )
 
+    # Quick Convert owns split selection and validation. Generic root scans
+    # have no split label and store metadata directly in the output folder.
+    splits = dataset.splits if dataset.splits is not None else [None]
+
     feature_set = opensmile.FeatureSet.eGeMAPSv02
     feature_level = opensmile.FeatureLevel.LowLevelDescriptors
 
@@ -72,8 +81,8 @@ def main():
         raise ValueError("you must set a dataset name in --dataset or pass --out-folder")
 
     out_dir = Path(args.out_root) / out_folder
-    for split in args.splits:
-        split_dir = out_dir / split
+    for split in splits:
+        split_dir = out_dir / split if split is not None else out_dir
         split_dir.mkdir(parents=True, exist_ok=True)
 
         metadata = {
@@ -98,7 +107,7 @@ def main():
             )
 
     # Validate every split before updating any metadata.
-    for split in args.splits:
+    for split in splits:
         metadata = {
             "feature_set": feature_set.name,
             "feature_level": feature_level.name,
@@ -106,9 +115,12 @@ def main():
             "jitter_min_periods": args.jitter_min_periods,
             "split": split,
         }
-        (out_dir / split / "_metadata.json").write_text(json.dumps(metadata, indent=2))
+        split_dir = out_dir / split if split is not None else out_dir
+        (split_dir / "_metadata.json").write_text(json.dumps(metadata, indent=2))
 
-    for sample in tqdm(dataset, desc="+".join(args.splits)):
+    for sample in tqdm(
+        dataset, desc="+".join(split for split in splits if split is not None) or "audio"
+    ):
         relative_path = utterance_relative_path(sample.utt_id, sample.split)
         out_path = out_dir / relative_path.parent / f"{relative_path.name}.parquet"
 
