@@ -97,12 +97,14 @@ class FrameDataset(IterableDataset):
         speaker_stats: PathLike | None = None,
         spk_id_template: str = "{path.parent.parent.stem}",
         preserve_layers: bool = False,
+        utterance_batches: bool = False,
     ):
         super().__init__()
 
         self.content_encoder = content_encoder.eval()
         self.content_frame_hz = self._encoder_frame_hz()
         self.preserve_layers = preserve_layers
+        self.utterance_batches = utterance_batches
         self.target = target
         if self.target.transform_kwargs is not None and speaker_stats is None:
             raise ValueError(f"Target {self.target.name!r} requires speaker statistics.")
@@ -242,6 +244,7 @@ class FrameDataset(IterableDataset):
         values: torch.Tensor,
         *,
         preserve_layers: bool = False,
+        utterance_batches: bool = False,
     ) -> torch.Tensor:
         """Normalize one utterance for single-layer probing or layer fusion."""
         if preserve_layers:
@@ -270,6 +273,10 @@ class FrameDataset(IterableDataset):
         audio_batch = self.base_dataset.collate_fn(samples)
 
         content = self.content_encoder(audio_batch)
+        return self.frames_from_content(samples, content)
+
+    def frames_from_content(self, samples, content) -> list[AudioSample]:
+        """Align targets and form contexts without severing encoder autograd."""
         if content.frame_hz is None:
             raise ValueError(
                 f"{type(self.content_encoder).__name__} returned features without a frame timebase."
@@ -378,6 +385,9 @@ class FrameDataset(IterableDataset):
         residual: list[AudioSample] = []
 
         for samples in utterance_loader:
+            if self.utterance_batches:
+                yield self.base_dataset.collate_fn(samples)
+                continue
             frames = self.extract_frames(samples)
 
             pool = residual + frames

@@ -314,3 +314,41 @@ pitch-window limit, so compare valid-frame coverage alongside probe scores.
 Extraction metadata records the period count. Conflicting settings in an
 existing store are rejected; fallback extraction uses the recorded setting.
 Legacy metadata without a period count is interpreted as the default of two.
+
+### Fine-tune an encoder for one target
+
+Use utterance batches for both the frozen baseline and fine-tuned comparison.
+The encoder runs inside the training step, followed by the same frame alignment,
+valid-target mask, context windows, probe and metrics as ordinary frame probing.
+
+```bash
+uv run ssl-probe train \
+    --root /cfs/collections/librispeech/LibriSpeech \
+    --encoder wavlm --encoder-kwargs '{"layer":6}' \
+    --target jitter --context-size 3 --hidden-dim 512 \
+    --train-split train-clean-100 --val-split dev-clean \
+    --batch-mode utterances --inference-frame-budget 300 \
+    --lr 1e-3 --max-steps 10000 --warmup 0.05
+```
+
+Run the same command with `--train-encoder --encoder-lr 1e-5` for fine-tuning.
+Run names distinguish `online-frozen` from `finetuned`. Choose the same encoder
+layer/fusion, target store, normalization and splits for both runs. Weighted-sum
+fusion works with this path too; configure the encoder to return all layers.
+
+In utterance mode, one optimizer step uses all valid context centers from one
+padded audio batch. `--frame-batch-size` controls only the original frame mode;
+`--inference-frame-budget` controls audio batching (default 300 in utterance mode).
+A single longer utterance may exceed that budget; it is not a truncation limit.
+Steps therefore are not directly comparable with older shuffled-frame runs.
+Batches without valid targets skip optimization. Validation uses the updated
+encoder without gradients. Frozen encoders remain in evaluation mode; fine-tuned
+encoders follow training mode. Backends must support autograd; WavLM is the first
+pretrained backend verified with the Quick-Convert smoke check.
+
+Fine-tuned encoder weights are included in Lightning checkpoints alongside the
+probe and optimizer/scheduler state; frozen encoder weights are omitted and must
+be reconstructed from the run's recorded encoder configuration. Target
+standardization remains optional (`--target-normalization standardize`), uses
+training targets only, and leaves reported metrics on the original transformed
+scale. Encoder and probe gradient norms are logged separately.
