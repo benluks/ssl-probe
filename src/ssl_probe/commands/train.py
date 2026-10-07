@@ -15,7 +15,7 @@ from ..dataset import FrameDataset
 from ..encoders import build_content_encoder, build_layer_fusion, content_encoder_slug
 from ..probe import Probe
 from ..targets import TARGETS, RegressionTask
-from ..training import ProbeTrainingModule
+from ..training import OnlineProbeTrainingModule, ProbeTrainingModule
 
 
 def parse_args(argv: list[str] | None = None):
@@ -48,6 +48,18 @@ def parse_args(argv: list[str] | None = None):
         metavar="JSON",
         help="JSON constructor arguments, for example '{\"layer\": 12}'.",
     )
+    parser.add_argument(
+        "--batch-mode",
+        choices=["frames", "utterances"],
+        default="frames",
+        help="Utterances runs the encoder inside each training step.",
+    )
+    parser.add_argument(
+        "--train-encoder",
+        action="store_true",
+        help="Fine-tune the online encoder (utterance mode only).",
+    )
+    parser.add_argument("--encoder-lr", type=float, default=1e-5)
     parser.add_argument("--context-size", type=int, default=1)
     parser.add_argument(
         "--layer-fusion",
@@ -79,7 +91,7 @@ def parse_args(argv: list[str] | None = None):
         "--inference-frame-budget",
         type=int,
         default=None,
-        help="Audio inference batch budget in encoder frames; defaults to 10 times frame batch size.",
+        help="Padded audio batch budget in encoder frames; default: 300 in utterance mode, otherwise 10 times frame batch size.",
     )
     parser.add_argument("--hidden-dim", type=int, nargs="+", default=[])
     parser.add_argument(
@@ -133,6 +145,10 @@ def parse_args(argv: list[str] | None = None):
     args = parser.parse_args(argv)
     if args.inference_frame_budget is not None and args.inference_frame_budget <= 0:
         parser.error("--inference-frame-budget must be positive")
+    if args.train_encoder and args.batch_mode != "utterances":
+        parser.error("--train-encoder requires --batch-mode utterances")
+    if args.encoder_lr <= 0:
+        parser.error("--encoder-lr must be positive")
     using_manifests = args.train_manifest is not None or args.val_manifest is not None
     if using_manifests:
         if args.train_manifest is None or args.val_manifest is None:
@@ -202,6 +218,9 @@ def main():
         args.num_layers,
     )
 
+    audio_frame_budget = args.inference_frame_budget or (
+        300 if args.batch_mode == "utterances" else 10 * args.frame_batch_size
+    )
     train_dataset = FrameDataset(
         content_encoder=content_encoder,
         root=args.root,
@@ -218,8 +237,9 @@ def main():
         target=target,
         context_size=args.context_size,
         frame_batch_size=args.frame_batch_size,
-        inference_frame_budget=(args.inference_frame_budget or 10 * args.frame_batch_size),
+        inference_frame_budget=audio_frame_budget,
         preserve_layers=layer_fusion is not None,
+        utterance_batches=args.batch_mode == "utterances",
     )
 
     target_standardization = None
@@ -256,9 +276,10 @@ def main():
             target=target,
             context_size=args.context_size,
             frame_batch_size=args.frame_batch_size,
-            inference_frame_budget=(args.inference_frame_budget or 10 * args.frame_batch_size),
+            inference_frame_budget=audio_frame_budget,
             shuffle=False,
             preserve_layers=layer_fusion is not None,
+            utterance_batches=args.batch_mode == "utterances",
         )
     )
 
@@ -270,7 +291,22 @@ def main():
         feature_transform=layer_fusion,
     )
 
-    module = ProbeTrainingModule(
+    module_class = (
+        OnlineProbeTrainingModule if args.batch_mode == "utterances" else ProbeTrainingModule
+    )
+    online_kwargs = (
+        dict(
+            content_encoder=content_encoder,
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            train_encoder=args.train_encoder,
+            encoder_lr=args.encoder_lr,
+        )
+        if args.batch_mode == "utterances"
+        else {}
+    )
+    module = module_class(
+        **online_kwargs,
         probe=probe,
         target=target,
         layer_log_interval=args.layer_log_interval,
@@ -289,6 +325,8 @@ def main():
     )
 
     encoder_slug = content_encoder_slug(content_encoder, layer_fusion)
+    if args.batch_mode == "utterances":
+        encoder_slug += "-finetuned" if args.train_encoder else "-online-frozen"
     run_name = build_run_name(
         target=args.target,
         dataset=args.dataset,
