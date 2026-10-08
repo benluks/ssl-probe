@@ -61,7 +61,9 @@ def parse_args(argv: list[str] | None = None):
     )
     parser.add_argument("--encoder-lr", type=float, default=1e-5)
     parser.add_argument(
-        "--online-frame-sample-size", type=int, default=None,
+        "--online-frame-sample-size",
+        type=int,
+        default=None,
         help="Randomly subsample this many valid frames per online training step; validation remains exhaustive.",
     )
     parser.add_argument("--context-size", type=int, default=1)
