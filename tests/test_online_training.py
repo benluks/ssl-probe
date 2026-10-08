@@ -200,3 +200,48 @@ def test_online_frame_sampling_cli_validation():
         ["--root", "/audio", "--batch-mode", "utterances", "--online-frame-sample-size", "128"]
     )
     assert args.online_frame_sample_size == 128
+
+
+@pytest.mark.parametrize("train_encoder", [False, True])
+def test_frame_weighted_accumulation_matches_combined_frame_gradient(train_encoder, tmp_path):
+    import lightning as L
+    from torch.utils.data import DataLoader
+
+    torch.manual_seed(42)
+    module = make_module(train_encoder)
+    module.accumulate_valid_frames = 6
+    module.automatic_optimization = False
+    del module.log
+    del module.log_dict
+    module._trainer = None
+
+    trainer = L.Trainer(
+        accelerator="cpu",
+        max_steps=1,
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        num_sanity_val_steps=0,
+        default_root_dir=tmp_path,
+    )
+    loader = DataLoader([make_batch(), make_batch()], batch_size=None)
+    trainer.fit(module, train_dataloaders=loader)
+    assert trainer.global_step == 1
+    assert module._pending_frames == 0
+    assert module.cumulative_valid_frames == 6
+
+
+def test_accumulation_cli_rejects_offline_and_nonpositive():
+    from ssl_probe.commands.train import parse_args
+
+    with pytest.raises(SystemExit):
+        parse_args(["--root", "/audio", "--accumulate-valid-frames", "1024"])
+    with pytest.raises(SystemExit):
+        parse_args(
+            ["--root", "/audio", "--batch-mode", "utterances", "--accumulate-valid-frames", "0"]
+        )
+    args = parse_args(
+        ["--root", "/audio", "--batch-mode", "utterances", "--accumulate-valid-frames", "1024"]
+    )
+    assert args.accumulate_valid_frames == 1024
