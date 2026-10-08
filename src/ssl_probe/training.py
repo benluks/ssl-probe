@@ -158,7 +158,7 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
         self.train_encoder = train_encoder
         self.encoder_lr = encoder_lr
         if online_frame_sample_size is not None and online_frame_sample_size <= 0:
-            raise ValueError('online_frame_sample_size must be positive')
+            raise ValueError("online_frame_sample_size must be positive")
         self.online_frame_sample_size = online_frame_sample_size
         self.cumulative_valid_frames = 0
         self.cumulative_sampled_frames = 0
@@ -217,19 +217,22 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
             ):
                 raise RuntimeError("The selected encoder backend does not preserve autograd.")
         frames = dataset.frames_from_content(list(batch), content)
-        if stage == 'train':
+        if stage == "train":
             valid_count = len(frames)
-            if self.online_frame_sample_size is not None and valid_count > self.online_frame_sample_size:
-                selected = torch.randperm(valid_count)[:self.online_frame_sample_size].tolist()
+            if (
+                self.online_frame_sample_size is not None
+                and valid_count > self.online_frame_sample_size
+            ):
+                selected = torch.randperm(valid_count)[: self.online_frame_sample_size].tolist()
                 frames = [frames[i] for i in selected]
             self.cumulative_valid_frames += valid_count
             self.cumulative_sampled_frames += len(frames)
             for name, value in {
-                'train/valid_frames_per_step': valid_count,
-                'train/sample_frames_per_step': len(frames),
-                'train/utterances_per_step': len(batch),
-                'train/cumulative_valid_frames': self.cumulative_valid_frames,
-                'train/cumulative_sampled_frames': self.cumulative_sampled_frames,
+                "train/valid_frames_per_step": valid_count,
+                "train/sample_frames_per_step": len(frames),
+                "train/utterances_per_step": len(batch),
+                "train/cumulative_valid_frames": self.cumulative_valid_frames,
+                "train/cumulative_sampled_frames": self.cumulative_sampled_frames,
             }.items():
                 self.log(name, float(value), on_step=True, on_epoch=False, logger=True)
         if not frames:
