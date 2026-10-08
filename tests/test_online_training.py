@@ -172,3 +172,31 @@ def test_lightning_fit_and_validation(tmp_path):
     assert trainer.global_step == 2
     assert not torch.equal(before, module.content_encoder.scale)
     assert "val/loss" in trainer.callback_metrics
+
+
+def test_online_frame_sampling_preserves_gradient_and_validation_coverage():
+    module = make_module(True)
+    module.online_frame_sample_size = 2
+    train_output = module._shared_step(make_batch(), "train")
+    assert train_output.batch_size == 2
+    assert module.cumulative_valid_frames == 3
+    assert module.cumulative_sampled_frames == 2
+    train_output.loss.backward()
+    assert module.content_encoder.scale.grad is not None
+    val_output = module._shared_step(make_batch(), "val")
+    assert val_output.batch_size == 3
+
+
+def test_online_frame_sampling_cli_validation():
+    from ssl_probe.commands.train import parse_args
+
+    with pytest.raises(SystemExit):
+        parse_args(["--root", "/audio", "--online-frame-sample-size", "2"])
+    with pytest.raises(SystemExit):
+        parse_args(
+            ["--root", "/audio", "--batch-mode", "utterances", "--online-frame-sample-size", "0"]
+        )
+    args = parse_args(
+        ["--root", "/audio", "--batch-mode", "utterances", "--online-frame-sample-size", "128"]
+    )
+    assert args.online_frame_sample_size == 128
