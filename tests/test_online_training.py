@@ -245,3 +245,25 @@ def test_accumulation_cli_rejects_offline_and_nonpositive():
         ["--root", "/audio", "--batch-mode", "utterances", "--accumulate-valid-frames", "1024"]
     )
     assert args.accumulate_valid_frames == 1024
+
+
+def test_frozen_offline_and_online_frame_extraction_are_equivalent():
+    module = make_module(False)
+    dataset = module.train_dataset
+    batch = make_batch()
+    dataset.base_dataset = SimpleNamespace(collate_fn=lambda samples: AudioBatch.from_samples(samples))
+    with torch.no_grad():
+        offline = dataset.extract_frames(list(batch))
+        online_content = module.content_encoder(batch)
+        online = dataset.frames_from_content(list(batch), online_content)
+    assert len(offline) == len(online)
+    offline_batch = AudioBatch.from_samples(offline)
+    online_batch = AudioBatch.from_samples(online)
+    torch.testing.assert_close(
+        offline_batch.resources["content"].values,
+        online_batch.resources["content"].values,
+    )
+    torch.testing.assert_close(
+        offline_batch.resources["test"].values,
+        online_batch.resources["test"].values,
+    )
