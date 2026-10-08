@@ -146,6 +146,7 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
         train_encoder=False,
         encoder_lr=1e-5,
         online_frame_sample_size=None,
+        accumulate_valid_frames=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -160,6 +161,12 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
         if online_frame_sample_size is not None and online_frame_sample_size <= 0:
             raise ValueError("online_frame_sample_size must be positive")
         self.online_frame_sample_size = online_frame_sample_size
+        if accumulate_valid_frames is not None and accumulate_valid_frames <= 0:
+            raise ValueError("accumulate_valid_frames must be positive")
+        self.accumulate_valid_frames = accumulate_valid_frames
+        self.automatic_optimization = accumulate_valid_frames is None
+        self._pending_frames = 0
+        self._pending_batches = 0
         self.cumulative_valid_frames = 0
         self.cumulative_sampled_frames = 0
         # Frozen encoder weights can be reconstructed from the recorded config.
@@ -195,7 +202,45 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
 
     def training_step(self, batch, batch_idx):
         output = self._shared_step(batch, "train")
-        return output.loss if output.batch_size else None
+        if self.accumulate_valid_frames is None:
+            return output.loss if output.batch_size else None
+        if not output.batch_size:
+            return None
+
+        optimizer = self.optimizers()
+        if self._pending_frames == 0:
+            optimizer.zero_grad()
+        self.manual_backward(output.loss * (output.batch_size / self.accumulate_valid_frames))
+        self._pending_frames += output.batch_size
+        self._pending_batches += 1
+        if self._pending_frames >= self.accumulate_valid_frames:
+            self._flush_accumulated_gradients(optimizer)
+        return output.loss.detach()
+
+    def _flush_accumulated_gradients(self, optimizer):
+        if not self._pending_frames:
+            return
+        correction = self.accumulate_valid_frames / self._pending_frames
+        for parameter in self.parameters():
+            if parameter.grad is not None:
+                parameter.grad.mul_(correction)
+        self.log("train/frames_per_update", float(self._pending_frames), on_step=True)
+        self.log("train/utterance_batches_per_update", float(self._pending_batches), on_step=True)
+        optimizer.step()
+        optimizer.zero_grad()
+        scheduler = self.lr_schedulers()
+        if scheduler is not None:
+            if isinstance(scheduler, (list, tuple)):
+                for item in scheduler:
+                    item.step()
+            else:
+                scheduler.step()
+        self._pending_frames = 0
+        self._pending_batches = 0
+
+    def on_train_epoch_end(self):
+        if self.accumulate_valid_frames is not None and self._pending_frames:
+            self._flush_accumulated_gradients(self.optimizers())
 
     @property
     def grad_norm_modules(self):
