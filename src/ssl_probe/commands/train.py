@@ -61,6 +61,12 @@ def parse_args(argv: list[str] | None = None):
     )
     parser.add_argument("--encoder-lr", type=float, default=1e-5)
     parser.add_argument(
+        "--accumulate-valid-frames",
+        type=int,
+        default=None,
+        help="Accumulate gradients over online utterance batches until this many valid frames.",
+    )
+    parser.add_argument(
         "--online-frame-sample-size",
         type=int,
         default=None,
@@ -157,6 +163,10 @@ def parse_args(argv: list[str] | None = None):
         parser.error("--online-frame-sample-size must be positive")
     if args.online_frame_sample_size is not None and args.batch_mode != "utterances":
         parser.error("--online-frame-sample-size requires --batch-mode utterances")
+    if args.accumulate_valid_frames is not None and args.accumulate_valid_frames <= 0:
+        parser.error("--accumulate-valid-frames must be positive")
+    if args.accumulate_valid_frames is not None and args.batch_mode != "utterances":
+        parser.error("--accumulate-valid-frames requires --batch-mode utterances")
     if args.encoder_lr <= 0:
         parser.error("--encoder-lr must be positive")
     using_manifests = args.train_manifest is not None or args.val_manifest is not None
@@ -312,6 +322,7 @@ def main():
             train_encoder=args.train_encoder,
             encoder_lr=args.encoder_lr,
             online_frame_sample_size=args.online_frame_sample_size,
+            accumulate_valid_frames=args.accumulate_valid_frames,
         )
         if args.batch_mode == "utterances"
         else {}
