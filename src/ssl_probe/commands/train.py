@@ -60,6 +60,10 @@ def parse_args(argv: list[str] | None = None):
         help="Fine-tune the online encoder (utterance mode only).",
     )
     parser.add_argument("--encoder-lr", type=float, default=1e-5)
+    parser.add_argument(
+        "--online-frame-sample-size", type=int, default=None,
+        help="Randomly subsample this many valid frames per online training step; validation remains exhaustive.",
+    )
     parser.add_argument("--context-size", type=int, default=1)
     parser.add_argument(
         "--layer-fusion",
@@ -147,6 +151,10 @@ def parse_args(argv: list[str] | None = None):
         parser.error("--inference-frame-budget must be positive")
     if args.train_encoder and args.batch_mode != "utterances":
         parser.error("--train-encoder requires --batch-mode utterances")
+    if args.online_frame_sample_size is not None and args.online_frame_sample_size <= 0:
+        parser.error("--online-frame-sample-size must be positive")
+    if args.online_frame_sample_size is not None and args.batch_mode != "utterances":
+        parser.error("--online-frame-sample-size requires --batch-mode utterances")
     if args.encoder_lr <= 0:
         parser.error("--encoder-lr must be positive")
     using_manifests = args.train_manifest is not None or args.val_manifest is not None
@@ -301,6 +309,7 @@ def main():
             val_dataset=val_dataset,
             train_encoder=args.train_encoder,
             encoder_lr=args.encoder_lr,
+            online_frame_sample_size=args.online_frame_sample_size,
         )
         if args.batch_mode == "utterances"
         else {}
