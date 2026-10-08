@@ -145,6 +145,7 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
         val_dataset=None,
         train_encoder=False,
         encoder_lr=1e-5,
+        online_frame_sample_size=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -156,6 +157,11 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
         self.val_dataset = val_dataset
         self.train_encoder = train_encoder
         self.encoder_lr = encoder_lr
+        if online_frame_sample_size is not None and online_frame_sample_size <= 0:
+            raise ValueError('online_frame_sample_size must be positive')
+        self.online_frame_sample_size = online_frame_sample_size
+        self.cumulative_valid_frames = 0
+        self.cumulative_sampled_frames = 0
         # Frozen encoder weights can be reconstructed from the recorded config.
         if not train_encoder:
             self.checkpoint_exclude_prefixes = ("content_encoder.",)
@@ -211,6 +217,21 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
             ):
                 raise RuntimeError("The selected encoder backend does not preserve autograd.")
         frames = dataset.frames_from_content(list(batch), content)
+        if stage == 'train':
+            valid_count = len(frames)
+            if self.online_frame_sample_size is not None and valid_count > self.online_frame_sample_size:
+                selected = torch.randperm(valid_count)[:self.online_frame_sample_size].tolist()
+                frames = [frames[i] for i in selected]
+            self.cumulative_valid_frames += valid_count
+            self.cumulative_sampled_frames += len(frames)
+            for name, value in {
+                'train/valid_frames_per_step': valid_count,
+                'train/sample_frames_per_step': len(frames),
+                'train/utterances_per_step': len(batch),
+                'train/cumulative_valid_frames': self.cumulative_valid_frames,
+                'train/cumulative_sampled_frames': self.cumulative_sampled_frames,
+            }.items():
+                self.log(name, float(value), on_step=True, on_epoch=False, logger=True)
         if not frames:
             # Keep a differentiable zero for automatic optimization on unlabelled batches.
             loss = sum(p.sum() * 0 for p in self.probe.parameters())
