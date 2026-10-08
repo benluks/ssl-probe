@@ -251,7 +251,9 @@ def test_frozen_offline_and_online_frame_extraction_are_equivalent():
     module = make_module(False)
     dataset = module.train_dataset
     batch = make_batch()
-    dataset.base_dataset = SimpleNamespace(collate_fn=lambda samples: AudioBatch.from_samples(samples))
+    dataset.base_dataset = SimpleNamespace(
+        collate_fn=lambda samples: AudioBatch.from_samples(samples)
+    )
     with torch.no_grad():
         offline = dataset.extract_frames(list(batch))
         online_content = module.content_encoder(batch)
