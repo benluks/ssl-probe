@@ -210,6 +210,7 @@ def test_frame_weighted_accumulation_matches_combined_frame_gradient(train_encod
     torch.manual_seed(42)
     module = make_module(train_encoder)
     module.accumulate_valid_frames = 6
+    module.optimizer_update_limit = 1
     module.automatic_optimization = False
     del module.log
     del module.log_dict
@@ -230,6 +231,7 @@ def test_frame_weighted_accumulation_matches_combined_frame_gradient(train_encod
     assert trainer.global_step == 1
     assert module._pending_frames == 0
     assert module.cumulative_valid_frames == 6
+    assert module.completed_optimizer_updates == 1
 
 
 def test_accumulation_cli_rejects_offline_and_nonpositive():

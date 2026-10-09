@@ -147,6 +147,7 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
         encoder_lr=1e-5,
         online_frame_sample_size=None,
         accumulate_valid_frames=None,
+        optimizer_update_limit=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -164,6 +165,8 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
         if accumulate_valid_frames is not None and accumulate_valid_frames <= 0:
             raise ValueError("accumulate_valid_frames must be positive")
         self.accumulate_valid_frames = accumulate_valid_frames
+        self.optimizer_update_limit = optimizer_update_limit
+        self.completed_optimizer_updates = 0
         self.automatic_optimization = accumulate_valid_frames is None
         self._pending_frames = 0
         self._pending_batches = 0
@@ -195,9 +198,14 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
                 )
             return factory(groups, **kwargs)
 
+        total_steps = (
+            self.optimizer_update_limit
+            if self.accumulate_valid_frames is not None
+            else self.trainer.estimated_stepping_batches
+        )
         return replace(self.optimization, optimizer=grouped_optimizer).configure(
             self.parameters(),
-            total_steps=self.trainer.estimated_stepping_batches,
+            total_steps=total_steps,
         )
 
     def training_step(self, batch, batch_idx):
@@ -227,6 +235,12 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
         self.log("train/frames_per_update", float(self._pending_frames), on_step=True)
         self.log("train/utterance_batches_per_update", float(self._pending_batches), on_step=True)
         optimizer.step()
+        self.completed_optimizer_updates += 1
+        self.log(
+            "train/completed_optimizer_updates",
+            float(self.completed_optimizer_updates),
+            on_step=True,
+        )
         optimizer.zero_grad()
         scheduler = self.lr_schedulers()
         if scheduler is not None:
@@ -237,6 +251,11 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
                 scheduler.step()
         self._pending_frames = 0
         self._pending_batches = 0
+        if (
+            self.optimizer_update_limit is not None
+            and self.completed_optimizer_updates >= self.optimizer_update_limit
+        ):
+            self.trainer.should_stop = True
 
     def on_train_epoch_end(self):
         if self.accumulate_valid_frames is not None and self._pending_frames:

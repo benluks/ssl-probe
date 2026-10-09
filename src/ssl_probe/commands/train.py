@@ -323,6 +323,9 @@ def main():
             encoder_lr=args.encoder_lr,
             online_frame_sample_size=args.online_frame_sample_size,
             accumulate_valid_frames=args.accumulate_valid_frames,
+            optimizer_update_limit=(
+                args.max_steps if args.accumulate_valid_frames is not None else None
+            ),
         )
         if args.batch_mode == "utterances"
         else {}
@@ -364,7 +367,7 @@ def main():
         module=module,
         train_dataloader_kwargs={},
         trainer_kwargs={
-            "max_steps": args.max_steps,
+            "max_steps": -1 if args.accumulate_valid_frames is not None else args.max_steps,
             "accelerator": "auto",
             "val_check_interval": args.val_check_interval,
             "check_val_every_n_epoch": args.check_val_every_n_epoch,
