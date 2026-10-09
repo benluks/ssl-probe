@@ -3,6 +3,7 @@
 Run with: SSL_PROBE_TEST_WAVLM_PADDING=1 uv run pytest -s tests/test_wavlm_padding_integration.py
 Requires access to the WavLM checkpoint (may download it).
 """
+
 import os
 
 import pytest
@@ -38,10 +39,7 @@ def test_wavlm_layer6_is_padding_invariant():
     count = int(alone.lengths[0])
     assert int(padded.lengths[0]) == count
     delta = (alone.values[0, :count] - padded.values[0, :count]).abs()
-    print(
-        f"WavLM padding delta: max={delta.max().item():.6g}, "
-        f"mean={delta.mean().item():.6g}"
-    )
+    print(f"WavLM padding delta: max={delta.max().item():.6g}, mean={delta.mean().item():.6g}")
     torch.testing.assert_close(
         alone.values[0, :count],
         padded.values[0, :count],
