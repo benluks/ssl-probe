@@ -14,6 +14,7 @@ from ssl_probe.commands.diagnose_frozen import (
     tensor_check,
 )
 from ssl_probe.dataset import FrameDataset
+from ssl_probe.probe import Probe
 from ssl_probe.targets import FrameTarget, RegressionTask, TargetStandardization
 
 
@@ -81,6 +82,8 @@ def test_real_training_paths_match_features_gradients_and_multiple_updates(stand
     assert report["controlled_parity_pass"]
     assert report["audio_batch_invariance_pass"]
     assert report["valid_frames"] == 8
+    assert report["audio_batching_impact"]["affected_frames"] == 0
+    assert report["audio_batching_impact"]["predictions"]["max_abs"] == 0
     assert len(report["controlled_updates"]) == 3
     assert torch.equal(before, dataset.content_encoder.scale)
     for update in report["controlled_updates"]:
@@ -97,6 +100,9 @@ def test_diagnostic_detects_batch_dependent_encoder_without_confusing_path_parit
     assert report["controlled_parity_pass"]
     assert not report["audio_batch_invariance_pass"]
     assert report["different_audio_batch_extraction"]["features"]["max_abs"] == 2
+    assert report["audio_batching_impact"]["affected_frames"] == 3
+    assert report["audio_batching_impact"]["features"]["max_abs"] == 2
+    assert report["audio_batching_impact"]["predictions"]["max_abs"] > 0
 
 
 def test_diagnostic_detects_online_feature_corruption():
@@ -114,6 +120,28 @@ def test_diagnostic_detects_online_feature_corruption():
     assert not report["controlled_parity_pass"]
     assert not report["same_audio_batch_extraction"][0]["features"]["pass"]
     assert not report["controlled_updates"][0]["gradients_pass"]
+
+
+def test_checkpoint_head_is_used_for_prediction_impact(tmp_path):
+    dataset, samples = fixture(padding_sensitive=True)
+    probe = Probe(6, 1, [512], "gelu")
+    for parameter in probe.parameters():
+        parameter.data.zero_()
+    path = tmp_path / "probe.ckpt"
+    torch.save(
+        {"state_dict": {f"probe.{key}": value for key, value in probe.state_dict().items()}}, path
+    )
+    report = run_diagnostic(
+        dataset,
+        samples,
+        audio_budget=7,
+        reference_audio_budget=100,
+        updates=1,
+        probe_checkpoint=path,
+    )
+    assert report["audio_batching_impact"]["features"]["max_abs"] == 2
+    assert report["audio_batching_impact"]["predictions"]["max_abs"] == 0
+    assert report["audio_batching_impact"]["probe_source"] == str(path)
 
 
 def test_comparisons_reject_shape_and_frame_identity_mismatches():

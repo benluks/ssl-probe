@@ -90,6 +90,45 @@ def frame_counts(frames, batch_size, seed):
     ]
 
 
+def batching_impact(left, right, probe, *, atol, rtol):
+    """Compare aligned features and predictions in bounded chunks."""
+    left = {frame.utt_id: frame for frame in left}
+    right = {frame.utt_id: frame for frame in right}
+    if left.keys() != right.keys():
+        raise ValueError("Cannot measure batching impact with different frame IDs")
+    device = next(probe.parameters()).device
+    feature_errors, prediction_errors = [], []
+    affected = 0
+    keys = sorted(left)
+    with torch.no_grad():
+        for start in range(0, len(keys), 256):
+            chunk = keys[start : start + 256]
+            a, b = [
+                torch.stack([frames[key].resources["content"].value for key in chunk]).to(device)
+                for frames in (left, right)
+            ]
+            feature_errors.append((a.double() - b.double()).flatten().cpu())
+            affected += int((~torch.isclose(a, b, atol=atol, rtol=rtol)).flatten(1).any(1).sum())
+            prediction_errors.append((probe(a).double() - probe(b).double()).flatten().cpu())
+
+    def summarize(values):
+        delta = torch.cat(values).abs()
+        return {
+            "mean_abs": float(delta.mean()),
+            "rms": float(delta.square().mean().sqrt()),
+            "p95_abs": float(torch.quantile(delta, 0.95)),
+            "max_abs": float(delta.max()),
+        }
+
+    return {
+        "frames": len(keys),
+        "affected_frames": affected,
+        "affected_frame_fraction": affected / len(keys),
+        "features": summarize(feature_errors),
+        "predictions": summarize(prediction_errors),
+    }
+
+
 def run_diagnostic(
     dataset,
     samples,
@@ -105,6 +144,7 @@ def run_diagnostic(
     warmup=0.05,
     atol=1e-5,
     rtol=1e-4,
+    probe_checkpoint=None,
 ):
     encoder = dataset.content_encoder.eval().requires_grad_(False)
     target = dataset.target
@@ -137,12 +177,28 @@ def run_diagnostic(
     # Logging is disabled; their native step implementations still run unchanged.
     torch.manual_seed(seed)
     probe = Probe(dataset.feature_dim * dataset.context_size, 1, [512], "gelu")
+    if probe_checkpoint is not None:
+        from .evaluate import load_checkpoint
+
+        checkpoint = load_checkpoint(probe_checkpoint)
+        state = checkpoint["state_dict"]
+        probe.load_state_dict(
+            {
+                key.removeprefix("probe."): value
+                for key, value in state.items()
+                if key.startswith("probe.")
+            },
+            strict=True,
+        )
     optimization = Optimization(
         optimizer_kwargs={"lr": lr, "weight_decay": weight_decay},
         lr_scheduler_kwargs={"T_max": schedule_steps},
         warmup=LinearWarmup(warmup),
     )
     device = encoder.device
+    probe.to(device).eval()
+    impact = batching_impact(reference, offline_frames, probe, atol=atol, rtol=rtol)
+    impact["probe_source"] = str(probe_checkpoint) if probe_checkpoint else "seeded initialization"
     frame_module = QuietFrameModule(probe=probe, target=target, optimization=optimization).to(
         device
     )
@@ -240,6 +296,7 @@ def run_diagnostic(
         "valid_frames": len(offline_frames),
         "same_audio_batch_extraction": parity,
         "different_audio_batch_extraction": padding,
+        "audio_batching_impact": impact,
         "controlled_updates": update_checks,
         "native_batching": {
             "frame_batch_size": frame_batch_size,
@@ -263,6 +320,11 @@ def parse_args(argv=None):
     parser.add_argument("--split", default="train-clean-100")
     parser.add_argument("--smile-root", type=Path, default=Path("features/opensmile/librispeech"))
     parser.add_argument("--encoder", default="wavlm")
+    parser.add_argument(
+        "--probe-checkpoint",
+        type=Path,
+        help="Optional frozen checkpoint with the diagnostic's encoder, target, context, 512/GELU head and normalization. Strict head loading; does not restore encoder weights or config.",
+    )
     parser.add_argument("--encoder-kwargs", type=json.loads, default={"layer": 6})
     parser.add_argument("--target", choices=TARGETS, default="jitter")
     parser.add_argument("--target-standardization", type=json.loads)
@@ -363,6 +425,7 @@ def main():
             warmup=args.warmup,
             atol=args.atol,
             rtol=args.rtol,
+            probe_checkpoint=args.probe_checkpoint,
         )
     report["arguments"] = {
         key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()
