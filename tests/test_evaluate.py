@@ -137,3 +137,41 @@ def test_evaluation_writes_aligned_outputs(monkeypatch, tmp_path):
         rows = list(csv.DictReader(handle))
     assert [float(row["time_seconds"]) for row in rows] == [0.02, 0.06]
     assert (tmp_path / "out/scatter.png").is_file()
+
+
+def test_load_legacy_checkpoint_and_sequential_probe(monkeypatch, tmp_path):
+    import sys
+    import types
+
+    from ssl_probe.commands.evaluate import load_checkpoint
+    from ssl_probe.targets import RegressionTask
+
+    # Serialize a real historical module reference, then remove the old modules.
+    with monkeypatch.context() as legacy:
+        package = types.ModuleType("src")
+        targets = types.ModuleType("src.targets")
+        task_module = types.ModuleType("src.targets.task")
+        task_module.RegressionTask = RegressionTask
+        legacy.setitem(sys.modules, "src", package)
+        legacy.setitem(sys.modules, "src.targets", targets)
+        legacy.setitem(sys.modules, "src.targets.task", task_module)
+        legacy.setattr(RegressionTask, "__module__", "src.targets.task")
+        probe = Probe(6, 1, [4])
+        state = {
+            "probe." + key.removeprefix("network."): value
+            for key, value in probe.state_dict().items()
+        }
+        torch.save(
+            {"state_dict": state, "hyper_parameters": {"target_task": RegressionTask()}},
+            tmp_path / "legacy.ckpt",
+        )
+    checkpoint = load_checkpoint(tmp_path / "legacy.ckpt")
+    assert isinstance(checkpoint["hyper_parameters"]["target_task"], RegressionTask)
+    monkeypatch.setattr(
+        "ssl_probe.commands.evaluate.build_content_encoder", lambda *args: Encoder()
+    )
+    config = {"encoder": "fake", "target": "jitter", "context_size": 3, "hidden_dim": [4]}
+    _, restored, _ = restore_models(checkpoint, config)
+    x = torch.randn(3, 3, 2)
+    assert torch.equal(restored(x), probe(x))
+    assert "src" not in sys.modules

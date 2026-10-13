@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import pickle
+import types
 from dataclasses import replace
 from pathlib import Path
 
@@ -17,6 +19,27 @@ from ..dataset import FrameDataset
 from ..encoders import build_content_encoder, build_layer_fusion
 from ..probe import Probe
 from ..targets import TARGETS, RegressionTask, TargetStandardization
+
+
+class LegacyCheckpointUnpickler(pickle.Unpickler):
+    """Translate the known pre-package target modules without global aliases."""
+
+    def find_class(self, module, name):
+        module = {
+            "src.targets.target": "ssl_probe.targets.target",
+            "src.targets.task": "ssl_probe.targets.task",
+        }.get(module, module)
+        return super().find_class(module, name)
+
+
+def load_checkpoint(path):
+    # torch.load expects a pickle module, including load/loads and Unpickler.
+    compatibility_pickle = types.ModuleType("ssl_probe_checkpoint_pickle")
+    compatibility_pickle.__dict__.update(vars(pickle))
+    compatibility_pickle.Unpickler = LegacyCheckpointUnpickler
+    return torch.load(
+        path, map_location="cpu", weights_only=False, pickle_module=compatibility_pickle
+    )
 
 
 def read_config(checkpoint_path, explicit=None):
@@ -84,6 +107,15 @@ def restore_models(checkpoint, config, device="cpu"):
     state = {
         key.replace("_orig_mod.", ""): value for key, value in checkpoint["state_dict"].items()
     }
+    # Before packaging, the Lightning module's probe was a bare Sequential.
+    legacy_probe = "probe.0.weight" in state
+    if legacy_probe:
+        state = {
+            "probe.network." + key.removeprefix("probe.")
+            if key.startswith("probe.")
+            else key: value
+            for key, value in state.items()
+        }
     probe.load_state_dict(
         {
             key.removeprefix("probe."): value
@@ -163,7 +195,7 @@ def main():
     args = parse_args()
     config = read_config(args.checkpoint, args.config)
     # Lightning checkpoints contain pickled metadata; use only trusted local files.
-    checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+    checkpoint = load_checkpoint(args.checkpoint)
     encoder, probe, target = restore_models(checkpoint, config, args.device)
     smile_root = args.smile_root or Path("features/opensmile") / args.dataset
     args.spk_id_template = args.spk_id_template or (
