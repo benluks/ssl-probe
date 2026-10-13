@@ -52,6 +52,28 @@ def tensor_check(left, right, *, atol, rtol):
     }
 
 
+def encoder_initialization_check(factory, input_dim):
+    """Measure an extra encoder construction's effect without changing run RNG."""
+    with torch.random.fork_rng():
+        state = torch.get_rng_state()
+        current = Probe(input_dim, 1, [512], "gelu")
+        torch.set_rng_state(state)
+        extra_encoder = factory()
+        consumed = not torch.equal(state, torch.get_rng_state())
+        historical = Probe(input_dim, 1, [512], "gelu")
+        checks = [
+            tensor_check(a, b, atol=0, rtol=0)
+            for a, b in zip(current.parameters(), historical.parameters(), strict=True)
+        ]
+        del extra_encoder
+    return {
+        "extra_encoder_consumes_cpu_rng": consumed,
+        "probe_initialization_identical": all(check["pass"] for check in checks),
+        "parameter_max_abs": max(check["max_abs"] for check in checks),
+        "scope": "Current encoder constructor only; the historical Quick-Convert revision is unavailable.",
+    }
+
+
 def compare_frames(left, right, target, *, atol, rtol):
     left = {frame.utt_id: frame for frame in left}
     right = {frame.utt_id: frame for frame in right}
@@ -321,6 +343,11 @@ def parse_args(argv=None):
     parser.add_argument("--smile-root", type=Path, default=Path("features/opensmile/librispeech"))
     parser.add_argument("--encoder", default="wavlm")
     parser.add_argument(
+        "--check-encoder-rng",
+        action="store_true",
+        help="Build one extra encoder to test historical construction-order effects on probe initialization.",
+    )
+    parser.add_argument(
         "--probe-checkpoint",
         type=Path,
         help="Optional frozen checkpoint with the diagnostic's encoder, target, context, 512/GELU head and normalization. Strict head loading; does not restore encoder weights or config.",
@@ -365,10 +392,19 @@ def parse_args(argv=None):
 
 def main():
     args = parse_args()
+    torch.manual_seed(args.seed)
     print("Loading frozen encoder and selecting diagnostic utterances", flush=True)
     encoder = build_content_encoder(args.encoder, args.encoder_kwargs)
     encoder.to(args.device).eval().requires_grad_(False)
     encoder.device = torch.device(args.device)
+    initialization = (
+        encoder_initialization_check(
+            lambda: build_content_encoder(args.encoder, args.encoder_kwargs),
+            encoder.feature_dim * args.context_size,
+        )
+        if args.check_encoder_rng
+        else None
+    )
     target = TARGETS[args.target]
     if not isinstance(target.task, RegressionTask) or target.transform_kwargs is not None:
         raise ValueError("Diagnostic supports regression targets without speaker statistics.")
@@ -430,6 +466,7 @@ def main():
     report["arguments"] = {
         key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()
     }
+    report["encoder_initialization"] = initialization
     args.out_dir.mkdir(parents=True, exist_ok=True)
     (args.out_dir / "report.json").write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     print(
