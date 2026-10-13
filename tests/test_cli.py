@@ -19,6 +19,7 @@ from ssl_probe.commands.train import (
     "arguments",
     [
         ("train", "--help"),
+        ("evaluate", "--help"),
         ("correlate", "--help"),
         ("precompute", "opensmile", "--help"),
         ("precompute", "knnvc", "--help"),
