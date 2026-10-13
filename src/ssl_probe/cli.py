@@ -4,6 +4,7 @@ import runpy
 import sys
 
 COMMANDS = {
+    ("evaluate",): "ssl_probe.commands.evaluate",
     ("train",): "ssl_probe.commands.train",
     ("correlate",): "ssl_probe.commands.correlate",
     ("precompute", "opensmile"): "ssl_probe.commands.precompute_opensmile",
@@ -15,9 +16,10 @@ COMMANDS = {
 def main() -> None:
     args = sys.argv[1:]
     if not args or args[0] in {"-h", "--help"}:
-        print("usage: ssl-probe {train,correlate,precompute} ...")
+        print("usage: ssl-probe {train,evaluate,correlate,precompute} ...")
         print("\ncommands:")
         print("  train")
+        print("  evaluate")
         print("  correlate")
         print("  precompute opensmile")
         print("  precompute knnvc")

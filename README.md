@@ -352,3 +352,49 @@ be reconstructed from the run's recorded encoder configuration. Target
 standardization remains optional (`--target-normalization standardize`), uses
 training targets only, and leaves reported metrics on the original transformed
 scale. Encoder and probe gradient norms are logged separately.
+
+### Evaluate an existing regression checkpoint
+
+Evaluation freezes the probe and encoder, restores fine-tuned encoder and learned
+layer-fusion weights when present, and uses the training context and normalization.
+It does not load training data or update parameters. Only load trusted checkpoints.
+
+```bash
+ssl-probe evaluate \
+  --checkpoint 'outputs/jitter/original_librispeech_wavlm_l6_gelu_c3/ssl-probe/2g19j9lh/checkpoints/epoch=1-step=10000.ckpt' \
+  --config /path/to/saved-run-config.yaml \
+  --root "$QUICK_CONVERT_CLAC_ROOT" \
+  --dataset clac --split max_phonation \
+  --smile-root features/opensmile/clac \
+  --device cuda \
+  --out-dir outputs/evaluations/2g19j9lh/max_phonation
+```
+
+`--config` can be omitted when a complete `config.json`, `config.yaml`, or
+`hparams.yaml` is found near the checkpoint. Older checkpoints require the original
+training arguments, for example a W&B config export in JSON/YAML. Required keys are
+`encoder`, `target`, and `context_size`; also preserve `encoder_kwargs`, `hidden_dim`,
+`nonlinearity`, `layer_fusion`, `num_layers`, `train_encoder`, and
+`target_normalization` if used. Standardized runs require the saved
+`target_standardization` (mean/std/count), either in the configuration or a nearby
+`target_standardization.json`; evaluation never estimates it from evaluation data.
+Missing or mismatched model weights cause an error.
+
+CLAC feature IDs include the elicitation directory, so `--smile-root` is the
+**dataset-level** directory, not `features/opensmile/clac/max_phonation`.
+Precompute targets first with `ssl-probe precompute opensmile --root
+"$QUICK_CONVERT_CLAC_ROOT" --dataset clac --splits max_phonation --out-folder clac`.
+Use the same openSMILE extraction settings as training (including jitter periods).
+
+Outputs: `metrics.json`, `predictions.csv`, and `scatter.png` with an identity line.
+Scores are on the target's transformed scale, with training standardization undone.
+Metrics include pooled frames, per-speaker scores, and equally weighted speaker
+means. Undefined R²/correlation values are JSON null. The constant baseline uses
+the evaluation-set mean and is a descriptive oracle baseline. Empty utterances
+are listed; an entirely empty evaluation fails. Non-finite predictions fail.
+CLAC speaker grouping defaults to the file stem; override `--spk-id-template` if
+your filenames use a different convention. `--manifest` can replace `--root`;
+its rows must already select the desired evaluation recordings.
+
+Audio is encoded one utterance at a time to avoid padding-dependent predictions;
+`--frame-batch-size` controls probe inference batches and `--device` defaults to CPU.
