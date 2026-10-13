@@ -398,3 +398,44 @@ its rows must already select the desired evaluation recordings.
 
 Audio is encoded one utterance at a time to avoid padding-dependent predictions;
 `--frame-batch-size` controls probe inference batches and `--device` defaults to CPU.
+
+### Diagnose frozen frame/online parity
+
+Before another full training run, run a bounded diagnostic on the cluster:
+
+```bash
+uv run --no-sync ssl-probe diagnose-frozen \
+  --root /tmp/u036742/librispeech/LibriSpeech \
+  --smile-root features/opensmile/librispeech \
+  --device cuda --utterances 16 --updates 5 \
+  --out-dir outputs/diagnostics/frozen-parity
+```
+
+Defaults match the original WavLM layer-6 jitter probe: context 3, hidden width
+512, GELU, no target standardization, LR 1e-3, weight decay 1e-4, 10k-step cosine
+schedule and 5% warmup. Use `--target-standardization '{"mean":...,"std":...,"count":...}'`
+only when reproducing a standardized experiment; statistics are never estimated
+from the diagnostic subset. `--schedule-steps` and `--warmup` set the common
+schedule in the two controlled arms.
+
+The command selects a reproducible bounded audio subset, scans duration headers
+only for those selected files, and compares:
+
+- offline inference-mode extraction against online no-grad extraction using the
+  same audio batches, including frame IDs, contexts and transformed targets;
+- extraction under frame-mode's larger audio budget (10240) against online's
+  smaller budget (300), to expose padding/batching-dependent features;
+- actual frame and frozen-online training-module steps with identical initialization,
+  audio-derived frame batches, optimizer and schedule: predictions, losses,
+  gradients, parameter updates, LR and encoder freeze/eval state;
+- native batching statistics on the selected subset (shuffled fixed-size frame
+  batches versus whole utterance batches).
+
+`report.json` contains detailed results and the selected utterance IDs. The
+command creates no W&B run and saves no model. A mismatch exits nonzero *after*
+writing the report. A pass establishes controlled implementation parity only;
+it does not establish equal full-run convergence or historical-code parity.
+The native frame statistics use a globally shuffled selected pool, rather than
+reproducing the historical streaming shuffle order. Full-run frame exposure and
+batch weighting must still be matched separately. The real pretrained encoder
+and audio/features must be available where the command runs.

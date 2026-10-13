@@ -20,6 +20,7 @@ from ssl_probe.commands.train import (
     [
         ("train", "--help"),
         ("evaluate", "--help"),
+        ("diagnose-frozen", "--help"),
         ("correlate", "--help"),
         ("precompute", "opensmile", "--help"),
         ("precompute", "knnvc", "--help"),
