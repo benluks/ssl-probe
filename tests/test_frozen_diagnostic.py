@@ -9,6 +9,7 @@ from torch import nn
 
 from ssl_probe.commands.diagnose_frozen import (
     compare_frames,
+    encoder_initialization_check,
     parse_args,
     run_diagnostic,
     tensor_check,
@@ -16,6 +17,18 @@ from ssl_probe.commands.diagnose_frozen import (
 from ssl_probe.dataset import FrameDataset
 from ssl_probe.probe import Probe
 from ssl_probe.targets import FrameTarget, RegressionTask, TargetStandardization
+
+
+@pytest.mark.parametrize("consumes_rng", [False, True])
+def test_extra_encoder_initialization_is_measured_without_changing_rng(consumes_rng):
+    torch.manual_seed(115)
+    before = torch.get_rng_state().clone()
+    result = encoder_initialization_check(
+        lambda: nn.Linear(2, 2) if consumes_rng else nn.Identity(), 6
+    )
+    assert result["extra_encoder_consumes_cpu_rng"] == consumes_rng
+    assert result["probe_initialization_identical"] == (not consumes_rng)
+    assert torch.equal(torch.get_rng_state(), before)
 
 
 class Encoder(nn.Module):

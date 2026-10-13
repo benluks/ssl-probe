@@ -29,6 +29,22 @@ def test_align_target_frames_to_encoder_length() -> None:
     assert torch.equal(aligned, torch.tensor([0, 2, 4, 6, 8]))
 
 
+def test_long_wavlm_alignment_exactly_matches_legacy_stride():
+    target = torch.arange(20000)
+    aligned = FrameDataset._align_target_frames(
+        target, 10000, target_frame_hz=100.0, content_frame_hz=50.0
+    )
+    assert torch.equal(aligned, target[::2])
+
+
+def test_fractional_alignment_preserves_floor_and_integer_boundaries():
+    target = torch.arange(2000)
+    aligned = FrameDataset._align_target_frames(
+        target, 1000, target_frame_hz=100.0, content_frame_hz=60.0
+    )
+    assert torch.equal(aligned, torch.arange(1000) * 5 // 3)
+
+
 def test_normalize_singleton_layer_axis() -> None:
     values = torch.zeros(5, 1, 3)
 

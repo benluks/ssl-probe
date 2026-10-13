@@ -418,6 +418,12 @@ only when reproducing a standardized experiment; statistics are never estimated
 from the diagnostic subset. `--schedule-steps` and `--warmup` set the common
 schedule in the two controlled arms.
 
+Add `--check-encoder-rng` to test whether constructing a second encoder, as the
+historical training command did for validation, changes probe initialization.
+This loads one extra model and restores RNG state afterward. The
+`encoder_initialization` report describes the installed encoder implementation;
+it cannot establish behavior of an unavailable historical Quick-Convert revision.
+
 The command selects a reproducible bounded audio subset, scans duration headers
 only for those selected files, and compares:
 

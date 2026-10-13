@@ -234,8 +234,15 @@ class FrameDataset(IterableDataset):
         if raw_target.shape[0] == 0:
             raise ValueError("Cannot align an empty target sequence to non-empty encoder output.")
 
-        content_times = torch.arange(output_frames, dtype=torch.float64) / content_frame_hz
-        indices = torch.floor(content_times * target_frame_hz).to(dtype=torch.long)
+        # Compute the ratio first: (i / 50) * 100 can land just below 2*i.
+        # Snap only roundoff-sized distances from integer boundaries before floor.
+        positions = torch.arange(output_frames, dtype=torch.float64) * (
+            target_frame_hz / content_frame_hz
+        )
+        nearest = positions.round()
+        tolerance = 4 * torch.finfo(positions.dtype).eps * positions.abs().clamp_min(1)
+        positions = torch.where((positions - nearest).abs() <= tolerance, nearest, positions)
+        indices = positions.floor().to(dtype=torch.long)
         indices = indices[indices < raw_target.shape[0]]
         return raw_target[indices]
 
