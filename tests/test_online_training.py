@@ -249,6 +249,70 @@ def test_accumulation_cli_rejects_offline_and_nonpositive():
     assert args.accumulate_valid_frames == 1024
 
 
+@pytest.mark.parametrize("train_encoder", [False, True])
+def test_accumulation_flushes_partial_epoch_and_continues_training(train_encoder, tmp_path):
+    import lightning as L
+    from torch.utils.data import DataLoader
+
+    module = make_module(train_encoder)
+    module.optimization = Optimization(
+        optimizer_kwargs={"lr": 0.01},
+        lr_scheduler=torch.optim.lr_scheduler.StepLR,
+        lr_scheduler_kwargs={"step_size": 1, "gamma": 0.5},
+    )
+    module.accumulate_valid_frames = 6
+    module.optimizer_update_limit = 4
+    module.automatic_optimization = False
+    del module.log
+    del module.log_dict
+    module._trainer = None
+
+    class RecordUpdates(L.Callback):
+        def __init__(self):
+            self.epoch_updates = []
+            self.parameters_before_tail = None
+
+        def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+            if batch_idx == 2:
+                self.parameters_before_tail = [
+                    p.detach().clone() for p in pl_module.probe.parameters()
+                ]
+
+        def on_train_epoch_end(self, trainer, pl_module):
+            # Callback hooks run before the module's epoch-end flush.
+            self.epoch_updates.append(pl_module.completed_optimizer_updates)
+
+    record = RecordUpdates()
+    trainer = L.Trainer(
+        accelerator="cpu",
+        max_steps=-1,
+        max_epochs=3,
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        num_sanity_val_steps=0,
+        default_root_dir=tmp_path,
+        callbacks=[record],
+    )
+    # Each batch has three valid frames: one full update and one partial tail per epoch.
+    loader = DataLoader([make_batch(), make_batch(), make_batch()], batch_size=None)
+    trainer.fit(module, train_dataloaders=loader)
+    assert record.epoch_updates == [1, 3]
+    assert module.completed_optimizer_updates == 4
+    assert module.cumulative_valid_frames == 18
+    assert module._pending_frames == module._pending_batches == 0
+    assert any(
+        not torch.equal(before, after)
+        for before, after in zip(
+            record.parameters_before_tail, module.probe.parameters(), strict=True
+        )
+    )
+    scheduler = trainer.lr_scheduler_configs[0].scheduler
+    assert scheduler.last_epoch == 4
+    assert trainer.optimizers[0].param_groups[0]["lr"] == pytest.approx(0.01 * 0.5**4)
+
+
 def test_frozen_offline_and_online_frame_extraction_are_equivalent():
     module = make_module(False)
     dataset = module.train_dataset

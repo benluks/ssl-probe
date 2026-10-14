@@ -225,21 +225,22 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
             self._flush_accumulated_gradients(optimizer)
         return output.loss.detach()
 
-    def _flush_accumulated_gradients(self, optimizer):
+    def _flush_accumulated_gradients(self, optimizer, *, epoch_end=False):
         if not self._pending_frames:
             return
         correction = self.accumulate_valid_frames / self._pending_frames
         for parameter in self.parameters():
             if parameter.grad is not None:
                 parameter.grad.mul_(correction)
-        self.log("train/frames_per_update", float(self._pending_frames), on_step=True)
-        self.log("train/utterance_batches_per_update", float(self._pending_batches), on_step=True)
+        logging = {"on_step": not epoch_end, "on_epoch": epoch_end}
+        self.log("train/frames_per_update", float(self._pending_frames), **logging)
+        self.log("train/utterance_batches_per_update", float(self._pending_batches), **logging)
         optimizer.step()
         self.completed_optimizer_updates += 1
         self.log(
             "train/completed_optimizer_updates",
             float(self.completed_optimizer_updates),
-            on_step=True,
+            **logging,
         )
         optimizer.zero_grad()
         scheduler = self.lr_schedulers()
@@ -259,7 +260,7 @@ class OnlineProbeTrainingModule(ProbeTrainingModule):
 
     def on_train_epoch_end(self):
         if self.accumulate_valid_frames is not None and self._pending_frames:
-            self._flush_accumulated_gradients(self.optimizers())
+            self._flush_accumulated_gradients(self.optimizers(), epoch_end=True)
 
     @property
     def grad_norm_modules(self):
