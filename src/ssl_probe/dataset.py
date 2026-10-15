@@ -148,9 +148,14 @@ class FrameDataset(IterableDataset):
         )
 
         self.split_smile_features = (
-            {split: SmileParquetStore(smile_root=path, feature_column=self.target.source, audio_root=audio_root)
-             for split, path in split_smile_roots.items()}
-            if split_smile_roots else None
+            {
+                split: SmileParquetStore(
+                    smile_root=path, feature_column=self.target.source, audio_root=audio_root
+                )
+                for split, path in split_smile_roots.items()
+            }
+            if split_smile_roots
+            else None
         )
         if self.split_smile_features is not None:
             rates = {store.frame_hz for store in self.split_smile_features.values()}
