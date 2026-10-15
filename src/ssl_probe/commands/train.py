@@ -24,8 +24,8 @@ def parse_args(argv: list[str] | None = None):
     # Data / representation
     parser.add_argument("--root")
     parser.add_argument("--dataset", type=str, default="librispeech")
-    parser.add_argument("--train-split", default="train-clean-100")
-    parser.add_argument("--val-split", default="dev-clean")
+    parser.add_argument("--train-split", nargs="+", default=["train-clean-100"])
+    parser.add_argument("--val-split", nargs="+", default=["dev-clean"])
     parser.add_argument(
         "--train-manifest",
         type=Path,
@@ -188,13 +188,13 @@ def resolve_smile_root(dataset: str, smile_root: Path | None) -> Path:
 
 def resolve_split_smile_root(
     smile_root: Path,
-    split: str,
+    splits: list[str],
     manifest_path: Path | None,
 ) -> Path:
     """Resolve feature paths without duplicating split-qualified manifest IDs."""
     if manifest_path is not None:
         return smile_root
-    return smile_root / split
+    return smile_root / splits[0] if len(splits) == 1 else smile_root
 
 
 def build_run_name(
@@ -245,7 +245,7 @@ def main():
         content_encoder=content_encoder,
         root=args.root,
         dataset_name=args.dataset,
-        splits=[args.train_split],
+        splits=args.train_split,
         manifest_path=args.train_manifest,
         smile_root=resolve_split_smile_root(
             args.smile_root,
@@ -253,6 +253,7 @@ def main():
             args.train_manifest,
         ),
         speaker_stats=args.speaker_stats,
+        split_smile_roots={split: args.smile_root / split for split in args.train_split} if args.train_manifest is None and len(args.train_split) > 1 else None,
         spk_id_template=args.spk_id_template,
         target=target,
         context_size=args.context_size,
@@ -284,7 +285,7 @@ def main():
             content_encoder=content_encoder,
             root=args.root,
             dataset_name=args.dataset,
-            splits=[args.val_split],
+            splits=args.val_split,
             manifest_path=args.val_manifest,
             smile_root=resolve_split_smile_root(
                 args.smile_root,
@@ -292,6 +293,7 @@ def main():
                 args.val_manifest,
             ),
             speaker_stats=args.speaker_stats,
+            split_smile_roots={split: args.smile_root / split for split in args.val_split} if args.val_manifest is None and len(args.val_split) > 1 else None,
             spk_id_template=args.spk_id_template,
             target=target,
             context_size=args.context_size,
