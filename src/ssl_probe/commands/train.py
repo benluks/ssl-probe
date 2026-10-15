@@ -253,7 +253,9 @@ def main():
             args.train_manifest,
         ),
         speaker_stats=args.speaker_stats,
-        split_smile_roots={split: args.smile_root / split for split in args.train_split} if args.train_manifest is None and len(args.train_split) > 1 else None,
+        split_smile_roots={split: args.smile_root / split for split in args.train_split}
+        if args.train_manifest is None and len(args.train_split) > 1
+        else None,
         spk_id_template=args.spk_id_template,
         target=target,
         context_size=args.context_size,
@@ -293,7 +295,9 @@ def main():
                 args.val_manifest,
             ),
             speaker_stats=args.speaker_stats,
-            split_smile_roots={split: args.smile_root / split for split in args.val_split} if args.val_manifest is None and len(args.val_split) > 1 else None,
+            split_smile_roots={split: args.smile_root / split for split in args.val_split}
+            if args.val_manifest is None and len(args.val_split) > 1
+            else None,
             spk_id_template=args.spk_id_template,
             target=target,
             context_size=args.context_size,
