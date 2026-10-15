@@ -167,3 +167,37 @@ def test_frame_dataset_accepts_split_qualified_manifest_ids(tmp_path, monkeypatc
     ]
     assert [row.split for row in dataset.base_dataset.rows] == ["picnic", "rainbow"]
     assert dataset.smile_features.smile_root == smile_root
+
+
+def test_multiple_split_smile_stores(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(FrameDataset, "_estimate_reference_frames", lambda self, path: 10)
+    rows = [
+        SimpleNamespace(utt_id="a", path="/unused/a.wav", split="train-clean-100"),
+        SimpleNamespace(utt_id="b", path="/unused/b.wav", split="train-clean-360"),
+    ]
+
+    class FakeDataset:
+        def __init__(self, rows):
+            self.rows = rows
+
+    monkeypatch.setattr(
+        "ssl_probe.dataset.load_dataset",
+        lambda *args, **kwargs: FakeDataset(rows),
+    )
+    root = tmp_path / "smile"
+    for split in ("train-clean-100", "train-clean-360"):
+        (root / split).mkdir(parents=True)
+        (root / split / "_metadata.json").write_text(json.dumps({"frame_hz": 100.0}))
+
+    dataset = FrameDataset(
+        content_encoder=FakeContentEncoder(),
+        target=TARGETS["spectral_flux"],
+        root=tmp_path,
+        splits=["train-clean-100", "train-clean-360"],
+        smile_root=root,
+        split_smile_roots={split: root / split for split in ("train-clean-100", "train-clean-360")},
+    )
+    assert dataset._smile_store(rows[0]).smile_root == root / "train-clean-100"
+    assert dataset._smile_store(rows[1]).smile_root == root / "train-clean-360"
