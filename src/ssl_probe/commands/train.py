@@ -188,12 +188,14 @@ def resolve_smile_root(dataset: str, smile_root: Path | None) -> Path:
 
 def resolve_split_smile_root(
     smile_root: Path,
-    splits: list[str],
+    splits: str | list[str],
     manifest_path: Path | None,
 ) -> Path:
     """Resolve feature paths without duplicating split-qualified manifest IDs."""
     if manifest_path is not None:
         return smile_root
+    if isinstance(splits, str):
+        splits = [splits]
     return smile_root / splits[0] if len(splits) == 1 else smile_root
 
 
