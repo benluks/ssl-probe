@@ -171,9 +171,10 @@ class FrameDataset(IterableDataset):
         ]
 
     def _smile_store(self, sample: AudioSample) -> SmileParquetStore:
-        if self.split_smile_features is None:
+        stores = getattr(self, "split_smile_features", None)
+        if stores is None:
             return self.smile_features
-        return self.split_smile_features[sample.split]
+        return stores[sample.split]
 
     @property
     def feature_dim(self) -> int:
