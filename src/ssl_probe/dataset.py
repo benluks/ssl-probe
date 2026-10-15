@@ -95,6 +95,7 @@ class FrameDataset(IterableDataset):
         shuffle=True,
         audio_root=None,
         speaker_stats: PathLike | None = None,
+        split_smile_roots: dict[str, PathLike] | None = None,
         spk_id_template: str = "{path.parent.parent.stem}",
         preserve_layers: bool = False,
         utterance_batches: bool = False,
@@ -146,6 +147,16 @@ class FrameDataset(IterableDataset):
             audio_root=audio_root,
         )
 
+        self.split_smile_features = (
+            {split: SmileParquetStore(smile_root=path, feature_column=self.target.source, audio_root=audio_root)
+             for split, path in split_smile_roots.items()}
+            if split_smile_roots else None
+        )
+        if self.split_smile_features is not None:
+            rates = {store.frame_hz for store in self.split_smile_features.values()}
+            if len(rates) != 1:
+                raise ValueError(f"All split OpenSMILE stores must have the same frame_hz: {rates}")
+
         self.inference_frame_budget = inference_frame_budget
         self.frame_batch_size = frame_batch_size
         self.shuffle = shuffle
@@ -153,6 +164,11 @@ class FrameDataset(IterableDataset):
         self.frame_lengths = [
             self._estimate_reference_frames(sample.path) for sample in self.base_dataset.rows
         ]
+
+    def _smile_store(self, sample: AudioSample) -> SmileParquetStore:
+        if self.split_smile_features is None:
+            return self.smile_features
+        return self.split_smile_features[sample.split]
 
     @property
     def feature_dim(self) -> int:
@@ -168,7 +184,7 @@ class FrameDataset(IterableDataset):
             self.base_dataset.rows,
             desc=f"target stats ({self.target.name})",
         ):
-            raw_target = self.smile_features[sample.utt_id]
+            raw_target = self._smile_store(sample)[sample.utt_id]
             kwargs = (
                 self.target.transform_kwargs(sample, self.stores)
                 if self.target.transform_kwargs is not None
@@ -313,7 +329,7 @@ class FrameDataset(IterableDataset):
             raw_target = self._align_target_frames(
                 raw_target,
                 n_content,
-                target_frame_hz=self.smile_features.frame_hz,
+                target_frame_hz=self._smile_store(sample).frame_hz,
                 content_frame_hz=content.frame_hz,
             )
 
