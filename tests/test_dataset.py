@@ -226,7 +226,7 @@ def test_frames_from_content_uses_split_specific_smile_store(tmp_path, monkeypat
     for split, value in (("dev-clean", 1.0), ("dev-other", 2.0)):
         folder = root / split
         folder.mkdir(parents=True)
-        pd.DataFrame({"spectralFlux_sma3": [value] * 10}).to_parquet(
+        pd.DataFrame({TARGETS["spectral_flux"].source: [value] * 10}).to_parquet(
             folder / "same-id.parquet"
         )
 
@@ -240,3 +240,5 @@ def test_frames_from_content_uses_split_specific_smile_store(tmp_path, monkeypat
     )
     assert dataset._smile_store(rows[0]).smile_root == root / "dev-clean"
     assert dataset._smile_store(rows[1]).smile_root == root / "dev-other"
+    assert dataset._smile_store(rows[0])[rows[0].utt_id][0].item() == 1.0
+    assert dataset._smile_store(rows[1])[rows[1].utt_id][0].item() == 2.0
