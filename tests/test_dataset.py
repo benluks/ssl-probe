@@ -201,3 +201,42 @@ def test_multiple_split_smile_stores(tmp_path, monkeypatch):
     )
     assert dataset._smile_store(rows[0]).smile_root == root / "train-clean-100"
     assert dataset._smile_store(rows[1]).smile_root == root / "train-clean-360"
+
+
+def test_frames_from_content_uses_split_specific_smile_store(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import pandas as pd
+
+    monkeypatch.setattr(FrameDataset, "_estimate_reference_frames", lambda self, path: 10)
+    rows = [
+        SimpleNamespace(utt_id="same-id", path="/unused/a.wav", split="dev-clean"),
+        SimpleNamespace(utt_id="same-id", path="/unused/b.wav", split="dev-other"),
+    ]
+
+    class FakeDataset:
+        def __init__(self, rows):
+            self.rows = rows
+
+    monkeypatch.setattr(
+        "ssl_probe.dataset.load_dataset",
+        lambda *args, **kwargs: FakeDataset(rows),
+    )
+    root = tmp_path / "smile"
+    for split, value in (("dev-clean", 1.0), ("dev-other", 2.0)):
+        folder = root / split
+        folder.mkdir(parents=True)
+        pd.DataFrame({"spectralFlux_sma3": [value] * 10}).to_parquet(
+            folder / "same-id.parquet"
+        )
+
+    dataset = FrameDataset(
+        content_encoder=FakeContentEncoder(),
+        target=TARGETS["spectral_flux"],
+        root=tmp_path,
+        splits=["dev-clean", "dev-other"],
+        smile_root=root,
+        split_smile_roots={split: root / split for split in ("dev-clean", "dev-other")},
+    )
+    assert dataset._smile_store(rows[0]).smile_root == root / "dev-clean"
+    assert dataset._smile_store(rows[1]).smile_root == root / "dev-other"
