@@ -331,7 +331,7 @@ class FrameDataset(IterableDataset):
                     f"{utterance_content.shape[-1]} features per frame."
                 )
 
-            raw_target = self.smile_features[sample.utt_id]
+            raw_target = self._smile_store(sample)[sample.utt_id]
             raw_target = self._align_target_frames(
                 raw_target,
                 n_content,
