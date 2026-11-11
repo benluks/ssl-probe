@@ -21,10 +21,22 @@ from ..probe import Probe
 from ..targets import TARGETS, RegressionTask, TargetStandardization
 
 
+def legacy_positive(values):
+    return values > 0
+
+
+def legacy_nonzero(values):
+    return values != 0
+
+
 class LegacyCheckpointUnpickler(pickle.Unpickler):
     """Translate the known pre-package target modules without global aliases."""
 
     def find_class(self, module, name):
+        if module in {"src.targets.target", "ssl_probe.targets.target"}:
+            removed_functions = {"positive": legacy_positive, "nonzero": legacy_nonzero}
+            if name in removed_functions:
+                return removed_functions[name]
         module = {
             "src.targets.target": "ssl_probe.targets.target",
             "src.targets.task": "ssl_probe.targets.task",

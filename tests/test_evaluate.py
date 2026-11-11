@@ -175,3 +175,50 @@ def test_load_legacy_checkpoint_and_sequential_probe(monkeypatch, tmp_path):
     x = torch.randn(3, 3, 2)
     assert torch.equal(restored(x), probe(x))
     assert "src" not in sys.modules
+
+
+def test_load_complete_legacy_target_metadata(monkeypatch, tmp_path):
+    import sys
+    import types
+
+    from ssl_probe.commands.evaluate import load_checkpoint
+    from ssl_probe.targets import FrameTarget, RegressionTask
+
+    with monkeypatch.context() as legacy:
+        target_module = types.ModuleType("src.targets.target")
+        exec(
+            "import torch\ndef positive(x): return x > 0\ndef nonzero(x): return x != 0\ndef log1p(x): return torch.log1p(x)",
+            target_module.__dict__,
+        )
+        target_module.FrameTarget = FrameTarget
+        task_module = types.ModuleType("src.targets.task")
+        task_module.RegressionTask = RegressionTask
+        for name, module in {
+            "src": types.ModuleType("src"),
+            "src.targets": types.ModuleType("src.targets"),
+            "src.targets.target": target_module,
+            "src.targets.task": task_module,
+        }.items():
+            legacy.setitem(sys.modules, name, module)
+        legacy.setattr(FrameTarget, "__module__", "src.targets.target")
+        legacy.setattr(RegressionTask, "__module__", "src.targets.task")
+        target = FrameTarget(
+            name="jitter",
+            source="jitterLocal_sma3nz",
+            task=RegressionTask(),
+            transform=target_module.log1p,
+            valid_mask=target_module.positive,
+        )
+        torch.save(
+            {
+                "state_dict": {},
+                "hyper_parameters": {"target": target, "mask": target_module.nonzero},
+            },
+            tmp_path / "legacy-target.ckpt",
+        )
+    checkpoint = load_checkpoint(tmp_path / "legacy-target.ckpt")
+    restored = checkpoint["hyper_parameters"]["target"]
+    values = torch.tensor([-1.0, 0.0, 1.0])
+    assert restored.valid_mask(values).tolist() == [False, False, True]
+    assert torch.equal(restored.transform(torch.tensor([1.0])), torch.log1p(torch.tensor([1.0])))
+    assert checkpoint["hyper_parameters"]["mask"](values).tolist() == [True, False, True]
