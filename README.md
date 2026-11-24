@@ -113,7 +113,7 @@ The representation encoder is not tied to WavLM. Quick Convert owns the built-in
 ```bash
 ssl-probe train \
   --root /path/to/LibriSpeech \
-  --encoder quick_convert.components.ssl.W2VBertContentEncoder \
+  --encoder quick_convert.components.encoders.content.W2VBertContentEncoder \
   --encoder-kwargs '{"layer": 12}' \
   --target logf0
 ```
@@ -445,3 +445,22 @@ The native frame statistics use a globally shuffled selected pool, rather than
 reproducing the historical streaming shuffle order. Full-run frame exposure and
 batch weighting must still be matched separately. The real pretrained encoder
 and audio/features must be available where the command runs.
+
+### Precompute from a private dataset configuration
+
+For indexed or segmented datasets, pass a trusted Hydra YAML containing a
+`dataset` node. Interpolations can refer to other nodes in the same file;
+only the dataset node is instantiated. Dataset configuration code is executed,
+so use configurations you trust. Keep private configurations outside version control.
+
+```bash
+ssl-probe precompute opensmile \
+  --dataset-config /path/to/private_dataset.yaml \
+  --out-folder indexed_speech \
+  --limit 10
+```
+
+Remove `--limit` for the full extraction. Existing Parquet files are skipped.
+The configured sample IDs and splits determine the output layout; unsplit
+datasets write directly under `features/opensmile/indexed_speech`.
+The extraction settings must match those used for the comparison feature store.

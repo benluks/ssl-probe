@@ -5,7 +5,7 @@ import os
 
 import pytest
 import torch
-from quick_convert.components.ssl import S3TokenizerContentEncoder
+from quick_convert.components.encoders.content import S3TokenizerContentEncoder
 
 from ssl_probe.dataset import FrameDataset
 from ssl_probe.encoders import build_layer_fusion

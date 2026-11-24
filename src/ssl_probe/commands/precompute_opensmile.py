@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from itertools import islice
 from pathlib import Path
 
 import opensmile
@@ -17,9 +18,14 @@ from ..paths import dataset_utt_id_overrides, utterance_relative_path
 def parse_args(argv=None):
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--root", required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--root")
+    source.add_argument(
+        "--dataset-config", type=Path, help="Trusted Hydra YAML with a dataset node."
+    )
+    parser.add_argument("--limit", type=int, help="Process at most this many samples.")
     parser.add_argument("--dataset", default=None)
-    parser.add_argument("--splits", nargs="+", required=True)
+    parser.add_argument("--splits", nargs="+")
     parser.add_argument(
         "--out-root",
         default="features/opensmile",
@@ -42,21 +48,50 @@ def parse_args(argv=None):
         validate_jitter_min_periods(args.jitter_min_periods)
     except ValueError as error:
         parser.error(str(error))
+    if args.limit is not None and args.limit <= 0:
+        parser.error("--limit must be positive")
+    if args.dataset_config is None and not args.splits:
+        parser.error("--splits is required with --root")
+    if args.dataset_config is not None:
+        if args.dataset or args.splits or args.utt_id_template:
+            parser.error("--dataset-config cannot be combined with dataset discovery options")
+        if not args.out_folder:
+            parser.error("--out-folder is required with --dataset-config")
     return args
 
 
 def main():
     args = parse_args()
 
-    dataset_kwargs = dataset_utt_id_overrides(args.dataset, args.utt_id_template)
+    if args.dataset_config is not None:
+        from hydra.utils import instantiate
+        from omegaconf import OmegaConf
 
-    dataset = load_dataset(
-        name=args.dataset,
-        root=args.root,
-        splits=args.splits,
-        load=["audio"],
-        **dataset_kwargs,
-    )
+        config = OmegaConf.load(args.dataset_config)
+        # Instantiate only the selected node: unused fold placeholders may be missing.
+        dataset = instantiate(config.dataset, load=["audio"])
+    else:
+        dataset_kwargs = dataset_utt_id_overrides(args.dataset, args.utt_id_template)
+        dataset = load_dataset(
+            name=args.dataset,
+            root=args.root,
+            splits=args.splits,
+            load=["audio"],
+            **dataset_kwargs,
+        )
+
+    # Inspect metadata without decoding audio. Unsplit datasets store metadata at the root.
+    rows = list(islice(dataset.rows, args.limit))
+    if not rows:
+        raise ValueError("The selected dataset contains no samples.")
+    splits = list(dict.fromkeys(row.split for row in rows))
+    seen = set()
+    for row in rows:
+        relative_path = utterance_relative_path(row.utt_id, row.split)
+        if relative_path in seen:
+            raise ValueError(f"Duplicate output ID: {relative_path}")
+        seen.add(relative_path)
+    dataset.rows = rows
 
     feature_set = opensmile.FeatureSet.eGeMAPSv02
     feature_level = opensmile.FeatureLevel.LowLevelDescriptors
@@ -72,8 +107,8 @@ def main():
         raise ValueError("you must set a dataset name in --dataset or pass --out-folder")
 
     out_dir = Path(args.out_root) / out_folder
-    for split in args.splits:
-        split_dir = out_dir / split
+    for split in splits:
+        split_dir = out_dir if split is None else out_dir / split
         split_dir.mkdir(parents=True, exist_ok=True)
 
         metadata = {
@@ -98,7 +133,7 @@ def main():
             )
 
     # Validate every split before updating any metadata.
-    for split in args.splits:
+    for split in splits:
         metadata = {
             "feature_set": feature_set.name,
             "feature_level": feature_level.name,
@@ -106,9 +141,10 @@ def main():
             "jitter_min_periods": args.jitter_min_periods,
             "split": split,
         }
-        (out_dir / split / "_metadata.json").write_text(json.dumps(metadata, indent=2))
+        split_dir = out_dir if split is None else out_dir / split
+        (split_dir / "_metadata.json").write_text(json.dumps(metadata, indent=2))
 
-    for sample in tqdm(dataset, desc="+".join(args.splits)):
+    for sample in tqdm(dataset, desc="+".join(str(split) for split in splits)):
         relative_path = utterance_relative_path(sample.utt_id, sample.split)
         out_path = out_dir / relative_path.parent / f"{relative_path.name}.parquet"
 

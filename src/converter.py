@@ -1,6 +1,6 @@
 import torch
-from quick_convert.components.decoders import KnnVCHifiGanDecoder
-from quick_convert.components.ssl import WavLMContentEncoder
+from quick_convert.components.generators.waveform.knnvc_hifigan import KnnVCHifiGanDecoder
+from quick_convert.components.encoders.content import WavLMContentEncoder
 from quick_convert.data import load_dataset
 from scipy.stats import pearsonr
 from tqdm import tqdm
