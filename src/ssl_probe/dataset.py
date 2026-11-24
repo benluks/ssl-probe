@@ -9,7 +9,7 @@ from pathlib import Path
 
 import torch
 import torchaudio
-from quick_convert.components.ssl import ContentEncoder
+from quick_convert.components.encoders.content import ContentEncoder
 from quick_convert.data import AudioBatch, AudioSample, ManifestDataset
 from quick_convert.data.loading import load_dataset
 from quick_convert.data.resources import (

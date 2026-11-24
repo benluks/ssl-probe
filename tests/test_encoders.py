@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pytest
 import torch
-from quick_convert.components.layers import LayerWeightedSum
-from quick_convert.components.ssl import (
+from quick_convert.components.encoders.content import (
     ContentEncoder,
     ContentFeatures,
     S3TokenizerContentEncoder,
     WavLMContentEncoder,
 )
+from quick_convert.components.layers import LayerWeightedSum
 
 from ssl_probe.encoders import (
     build_layer_fusion,

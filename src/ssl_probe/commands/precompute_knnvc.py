@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 import torchaudio
-from quick_convert.components.ssl import WavLMContentEncoder
+from quick_convert.components.encoders.content import WavLMContentEncoder
 from quick_convert.data.loading import load_dataset
 from tqdm import tqdm
 
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     try:
-        from quick_convert.components.decoders import KnnVCHifiGanDecoder
+        from quick_convert.components.generators.waveform.knnvc_hifigan import KnnVCHifiGanDecoder
     except ImportError as error:
         raise SystemExit(
             "The installed Quick Convert version does not provide KnnVCHifiGanDecoder. "

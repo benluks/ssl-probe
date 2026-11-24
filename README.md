@@ -113,7 +113,7 @@ The representation encoder is not tied to WavLM. Quick Convert owns the built-in
 ```bash
 ssl-probe train \
   --root /path/to/LibriSpeech \
-  --encoder quick_convert.components.ssl.W2VBertContentEncoder \
+  --encoder quick_convert.components.encoders.content.W2VBertContentEncoder \
   --encoder-kwargs '{"layer": 12}' \
   --target logf0
 ```

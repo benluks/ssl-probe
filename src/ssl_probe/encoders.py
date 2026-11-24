@@ -4,11 +4,11 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from quick_convert.components.layers import LayerWeightedSum
-from quick_convert.components.ssl import ContentEncoder
-from quick_convert.components.ssl import (
+from quick_convert.components.encoders.content import ContentEncoder
+from quick_convert.components.encoders.content import (
     resolve_content_encoder as resolve_content_encoder_class,
 )
+from quick_convert.components.layers import LayerWeightedSum
 
 ENCODER_DEFAULTS: dict[str, dict[str, Any]] = {
     "wavlm": {"layer": 6},
