@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import traceback
+from datetime import UTC, datetime
 from itertools import islice
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+from uuid import uuid4
 
 import opensmile
 from quick_convert.data.loading import load_dataset
@@ -24,6 +28,12 @@ def parse_args(argv=None):
         "--dataset-config", type=Path, help="Trusted Hydra YAML with a dataset node."
     )
     parser.add_argument("--limit", type=int, help="Process at most this many samples.")
+    parser.add_argument(
+        "--on-error",
+        choices=["raise", "skip"],
+        default="raise",
+        help="Stop on extraction errors (default), or record them and process remaining samples.",
+    )
     parser.add_argument("--dataset", default=None)
     parser.add_argument("--splits", nargs="+")
     parser.add_argument(
@@ -144,33 +154,85 @@ def main():
         split_dir = out_dir if split is None else out_dir / split
         (split_dir / "_metadata.json").write_text(json.dumps(metadata, indent=2))
 
-    for sample in tqdm(dataset, desc="+".join(str(split) for split in splits)):
-        relative_path = utterance_relative_path(sample.utt_id, sample.split)
-        out_path = out_dir / relative_path.parent / f"{relative_path.name}.parquet"
+    run_id = uuid4().hex
+    error_report = out_dir / "_errors.jsonl"
+    summary = {
+        "run_id": run_id,
+        "selected": len(rows),
+        "cached": 0,
+        "written": 0,
+        "failed": 0,
+        "status": "interrupted",
+    }
+    description = "+".join(split if split is not None else "all" for split in splits)
+    try:
+        for index, row in enumerate(tqdm(rows, desc=description)):
+            relative_path = utterance_relative_path(row.utt_id, row.split)
+            out_path = out_dir / relative_path.parent / f"{relative_path.name}.parquet"
+            # Check metadata before dataset access: __getitem__ decodes the audio.
+            if out_path.exists():
+                summary["cached"] += 1
+                continue
 
-        if out_path.exists():
-            continue
+            stage = "load"
+            try:
+                sample = dataset[index]
+                stage = "opensmile"
+                waveform = sample.waveform
+                if waveform.ndim == 2 and waveform.shape[0] == 1:
+                    waveform = waveform.squeeze(0)
+                features = smile.process_signal(
+                    waveform.detach().cpu().numpy(),
+                    int(sample.sample_rate),
+                ).reset_index()
+            except Exception as error:
+                summary["failed"] += 1
+                failure = {
+                    "run_id": run_id,
+                    "time": datetime.now(UTC).isoformat(),
+                    "index": index,
+                    "utt_id": row.utt_id,
+                    "path": str(row.path),
+                    "split": row.split,
+                    "start": row.start,
+                    "end": row.end,
+                    "output": str(out_path),
+                    "stage": stage,
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                    "traceback": traceback.format_exc(),
+                }
+                # Append and close immediately so failures survive later interruptions.
+                with error_report.open("a", encoding="utf-8") as stream:
+                    stream.write(json.dumps(failure) + "\n")
+                tqdm.write(f"Failed {row.utt_id} ({stage}): {error}")
+                if args.on_error == "raise":
+                    raise RuntimeError(
+                        f"Extraction failed for {row.utt_id!r}; details in {error_report}"
+                    ) from error
+                continue
 
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        waveform = sample.waveform
-
-        if waveform.ndim == 2 and waveform.shape[0] == 1:
-            waveform = waveform.squeeze(0)
-
-        features = smile.process_signal(
-            waveform.detach().cpu().numpy(),
-            int(sample.sample_rate),
-        )
-
-        # openSMILE returns start/end as index levels.
-        # Reset them so they are explicit columns in the parquet file.
-        features = features.reset_index()
-
-        features.to_parquet(
-            out_path,
-            index=False,
-        )
+            # Storage errors must still stop the run. Never leave a partial cache entry.
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = None
+            try:
+                with NamedTemporaryFile(dir=out_path.parent, suffix=".tmp", delete=False) as stream:
+                    temporary = Path(stream.name)
+                features.to_parquet(temporary, index=False)
+                temporary.replace(out_path)
+                summary["written"] += 1
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+        summary["status"] = "completed_with_errors" if summary["failed"] else "complete"
+    finally:
+        (out_dir / "_extraction_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(
+        f"Cached: {summary['cached']}; written: {summary['written']}; failed: {summary['failed']}."
+    )
+    if summary["failed"]:
+        print(f"Extraction has missing samples; inspect {error_report} before training.")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
