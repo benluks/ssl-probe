@@ -464,3 +464,32 @@ Remove `--limit` for the full extraction. Existing Parquet files are skipped.
 The configured sample IDs and splits determine the output layout; unsplit
 datasets write directly under `features/opensmile/indexed_speech`.
 The extraction settings must match those used for the comparison feature store.
+
+### Resume extraction and inspect failed samples
+
+Cached feature paths are checked from sample metadata before audio is loaded.
+To process the remaining samples even if individual recordings cannot be decoded:
+
+```bash
+ssl-probe precompute opensmile \
+  --dataset-config /path/to/dataset.yaml --out-folder indexed_speech \
+  --on-error skip
+```
+
+The default `--on-error raise` still stops at the first extraction failure.
+Both modes append failure details to `<out-root>/<out-folder>/_errors.jsonl`,
+including run ID, time, dataset index, utterance ID, source path, split, start/end,
+processing stage and traceback. Failed samples produce no Parquet file and are
+retried on the next invocation. The log is history: an old entry can refer to a
+sample that succeeded in a later run.
+
+`_extraction_summary.json` describes the latest invocation: selected, cached,
+written and failed counts, plus `complete`, `completed_with_errors` or
+`interrupted` status. With skip mode, the entire selected index is traversed;
+if any samples failed the command exits nonzero **after** processing the rest.
+Review the missing samples before using the feature store for training or
+comparing distributions. Skipping a decode error does not correct its cause.
+
+Storage errors still stop extraction. New Parquet files are written atomically
+so interrupted writes do not become cache hits. Existing files from older runs
+are assumed valid; their contents and annotation provenance are not revalidated.
