@@ -493,3 +493,66 @@ comparing distributions. Skipping a decode error does not correct its cause.
 Storage errors still stop extraction. New Parquet files are written atomically
 so interrupted writes do not become cache hits. Existing files from older runs
 are assumed valid; their contents and annotation provenance are not revalidated.
+
+### Compare saved acoustic target distributions
+
+`feature-stats` reads saved Parquet columns only; it never extracts audio or
+encoder features. By default it audits all 25 resource-free regression targets.
+Use `--targets jitter shimmer hnr logf0` for a smaller first comparison.
+
+```bash
+ssl-probe feature-stats \
+  --feature-root features/opensmile/indexed_speech \
+  --dataset-config /path/to/dataset.yaml \
+  --out outputs/feature_stats/indexed_speech.json
+
+ssl-probe feature-stats \
+  --feature-root features/opensmile/librispeech \
+  --splits train-clean-100 \
+  --speaker-regex '(?:^|/)([0-9]+)-[0-9]+-[0-9]+$' \
+  --out outputs/feature_stats/librispeech_train100.json
+```
+
+The YAML supplies metadata rows and a `spkid` resource by default (override with
+`--speaker-resource`). Linked participant identities are taken from that resource,
+not inferred from recording names. The configured sample IDs select feature files;
+missing IDs are reported and extra files outside the selected dataset are ignored.
+Use the same bounded/partitioned dataset config as extraction. Instantiation uses
+`load=[]`, but any configured index audit, such as ffprobe boundary checks, still
+runs. No waveforms are loaded. With a feature store alone, `--speaker-regex` must
+capture exactly one speaker ID from each split-relative feature ID; unmatched IDs
+fail. Omit both grouping options for pooled statistics only.
+
+The report includes zero and nonfinite rates, mask-valid coverage, mean, population
+standard deviation, minimum/maximum, median, IQR and tail percentiles. It reports
+**raw values on valid frames** separately from transformed probe targets, using
+`FrameTarget.apply` and float32 values exactly as the probe's source-target reader.
+For example, jitter is positive then log1p-transformed, shimmer is positive, and
+HNR is finite and nonzero (negative HNR is retained). Statistics use the source
+feature timebase, before subsampling/alignment to an SSL encoder's frame rate.
+They do not introduce an independent voicing/reliability mask.
+
+Only selected registered source columns are read: timestamps cannot conceal an
+all-NaN acoustic file. Read/schema errors, empty files and files with all selected
+features nonfinite are listed. Read errors produce a report and nonzero exit.
+A file with no target-valid frames contributes coverage counts but no distribution
+values. Missing data are never replaced by zero.
+
+Counts, moments and per-speaker summaries use **all valid frames**. Percentiles
+use a bounded, uniform frame sample of at most 100,000 values per target, controlled
+by `--quantile-samples` and `--seed`; reports label whether quantiles are exact.
+Sampling retains the smallest independent random priorities across the scan.
+Use `--limit 20` for a smoke run; the first files are not a representative subset.
+
+Within/between-speaker population variance is reported with both frame and equal
+speaker weighting. With frame weights, within + between equals pooled variance.
+Equal speaker moments weight each speaker equally; pooled percentiles still weight
+frames equally. Per-speaker moments are included for further inspection. These
+summaries describe the observed speakers and recordings, not unbiased estimates
+of population effects or proof of disease-related variation.
+
+Run the same targets/options on each store and compare the JSON reports. Check
+`extraction_metadata` first, particularly jitter period count, frame rate and
+feature set/level; metadata absent from legacy stores cannot establish parity.
+Conflicting settings within one store are rejected. Wider spread can also reflect
+recording conditions; predictability on unseen speakers requires a later probe.
